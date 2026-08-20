@@ -3,6 +3,10 @@
 Local-first HTML document search app built with Bun, Vite, React, TypeScript,
 IndexedDB, and the local Rust/WASM text packages from `../rust-packages`.
 
+That sibling-path integration is temporary. The consumer readiness audit and
+the exact release condition for replacing it with installable packages are in
+[docs/migrations/text-wasm-consumer-readiness.md](docs/migrations/text-wasm-consumer-readiness.md).
+
 ## Setup
 
 Build the local WASM packages first:
