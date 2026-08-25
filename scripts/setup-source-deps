@@ -1,0 +1,21 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+root="$(cd "$(dirname "$0")/.." && pwd)"
+nlp_stack="${NLP_STACK_DIR:-"$root/../nlp-stack"}"
+expected="$(tr -d '[:space:]' < "$root/.nlp-stack-rev")"
+
+if [[ ! -d "$nlp_stack/.git" ]]; then
+  printf 'Missing nlp-stack checkout at %s\n' "$nlp_stack" >&2
+  exit 2
+fi
+
+actual="$(git -C "$nlp_stack" rev-parse HEAD)"
+if [[ "$actual" != "$expected" ]]; then
+  printf 'nlp-stack is at %s; expected %s\n' "$actual" "$expected" >&2
+  exit 2
+fi
+
+bun run --cwd "$nlp_stack/packages/text-core-wasm" build
+bun run --cwd "$nlp_stack/packages/text-index-wasm" build
+bun install --cwd "$root"
