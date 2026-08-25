@@ -1,26 +1,22 @@
 # Document Search
 
 Local-first HTML document search app built with Bun, Vite, React, TypeScript,
-IndexedDB, and the local Rust/WASM text packages from `../rust-packages`.
-
-That sibling-path integration is temporary. The consumer readiness audit and
-the exact release condition for replacing it with installable packages are in
-[docs/migrations/text-wasm-consumer-readiness.md](docs/migrations/text-wasm-consumer-readiness.md).
+IndexedDB, and the text WASM packages from the sibling `nlp-stack` source
+checkout. Development does not wait for npm publication.
 
 ## Setup
 
-Build the local WASM packages first:
+Check out `nlp-stack` beside this repository at the exact revision recorded in
+`.nlp-stack-rev`, then build and install the source dependencies:
 
 ```bash
-bun run --cwd ../rust-packages/packages/text-core-wasm build
-bun run --cwd ../rust-packages/packages/text-index-wasm build
+git clone https://github.com/moritzbrantner/nlp-stack.git ../nlp-stack
+git -C ../nlp-stack checkout "$(cat .nlp-stack-rev)"
+./scripts/setup-source-deps
 ```
 
-Install dependencies:
-
-```bash
-bun install
-```
+The setup script refuses a moving or mismatched `nlp-stack` checkout before it
+builds `text-core-wasm`, builds `text-index-wasm`, and runs `bun install`.
 
 ## Commands
 

@@ -14,8 +14,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@moritzbrantner/text-core-wasm": "file:../rust-packages/packages/text-core-wasm",
-    "@moritzbrantner/text-index-wasm": "file:../rust-packages/packages/text-index-wasm",
+    "@moritzbrantner/text-core-wasm": "file:../nlp-stack/packages/text-core-wasm",
+    "@moritzbrantner/text-index-wasm": "file:../nlp-stack/packages/text-index-wasm",
     "@tanstack/react-query": "^5.101.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
