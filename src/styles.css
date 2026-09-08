@@ -218,6 +218,34 @@
     @apply w-auto;
   }
 
+  .search-filters {
+    @apply rounded-md border border-[#d9dfdc] bg-white;
+  }
+
+  .search-filters summary {
+    @apply cursor-pointer px-2.5 py-2 text-[0.84rem] font-semibold text-[#3f4d48];
+  }
+
+  .filter-grid {
+    @apply grid grid-cols-2 gap-2.5 border-t border-[#e3e7e4] p-2.5;
+  }
+
+  .filter-grid label {
+    @apply grid content-start gap-1 text-[0.82rem] font-semibold text-[#3f4d48];
+  }
+
+  .document-filter {
+    @apply col-span-2;
+  }
+
+  .document-filter select {
+    @apply min-h-24;
+  }
+
+  .control-help {
+    @apply text-[0.76rem] font-normal text-[#6a7772];
+  }
+
   .results-region {
     @apply min-h-0;
   }
@@ -391,6 +419,14 @@
     .toolbar,
     .button-row {
       @apply flex-wrap;
+    }
+
+    .filter-grid {
+      @apply grid-cols-1;
+    }
+
+    .document-filter {
+      @apply col-span-1;
     }
 
     .modal-backdrop {
