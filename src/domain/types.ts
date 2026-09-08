@@ -48,7 +48,7 @@ export interface SearchRequestState {
   topK: number;
   mode: "hybrid" | "lexical" | "semantic";
   requireQuotedPhrases: boolean;
-  fuzzy: boolean;
+  fuzzy?: boolean;
 }
 
 export interface FuzzyTermMatchView {
