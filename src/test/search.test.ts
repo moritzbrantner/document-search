@@ -26,7 +26,7 @@ test("searchCorpus returns paragraph-level results from text-index-wasm", async 
   expect(results[0]?.snippet).toContain("Climate policy");
 });
 
-test("searchCorpus filters ranked candidates by quoted phrases", async () => {
+test("searchCorpus delegates quoted phrase constraints to text-index", async () => {
   const results = await searchCorpus(
     [
       fakeDocument(
@@ -46,6 +46,32 @@ test("searchCorpus filters ranked candidates by quoted phrases", async () => {
 
   expect(results).toHaveLength(1);
   expect(results[0]?.documentId).toBe("doc-1");
+  expect(results[0]?.exactPhraseMatches).toEqual(["climate policy", "public funding"]);
+});
+
+test("required phrases are applied before top-K truncation", async () => {
+  const decoys = Array.from({ length: 16 }, (_, index) =>
+    fakeDocument(
+      `decoy-${index}`,
+      `Decoy ${index}`,
+      "climate risk climate risk policy market policy market public finance public finance funding budget funding",
+    ),
+  );
+  const exact = fakeDocument(
+    "exact",
+    "Exact phrase result",
+    "A concise climate policy note depends on public funding.",
+  );
+
+  const results = await searchCorpus([...decoys, exact], {
+    query: '"climate policy" "public funding"',
+    topK: 1,
+    mode: "lexical",
+    requireQuotedPhrases: true,
+  });
+
+  expect(results).toHaveLength(1);
+  expect(results[0]?.documentId).toBe("exact");
   expect(results[0]?.exactPhraseMatches).toEqual(["climate policy", "public funding"]);
 });
 

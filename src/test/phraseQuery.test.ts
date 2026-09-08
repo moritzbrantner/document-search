@@ -1,9 +1,5 @@
 import { expect, test } from "bun:test";
-import {
-  findExactPhraseMatches,
-  parsePhraseQuery,
-  resultContainsAllPhrases,
-} from "../domain/phraseQuery";
+import { findExactPhraseMatches, parsePhraseQuery } from "../domain/phraseQuery";
 
 test("quoted phrase parser handles one phrase", () => {
   expect(parsePhraseQuery('"climate policy" funding')).toEqual({
@@ -33,22 +29,21 @@ test("quoted phrase parser handles unquoted terms", () => {
   });
 });
 
-test("exact phrase filtering keeps only chunks containing all phrases", () => {
+test("quoted phrase parser ignores empty phrases without leaving search gaps", () => {
+  expect(parsePhraseQuery('climate ""   policy "   " funding')).toEqual({
+    searchText: "climate policy funding",
+    quotedPhrases: [],
+  });
+});
+
+test("quoted phrase parser normalizes phrase matching text while preserving search text", () => {
+  expect(parsePhraseQuery('"ＣＬＩＭＡＴＥ   Policy"')).toEqual({
+    searchText: "ＣＬＩＭＡＴＥ Policy",
+    quotedPhrases: ["climate policy"],
+  });
+});
+
+test("exact phrase highlighting applies whitespace, case, and NFKC normalization", () => {
   const phrases = ["climate policy", "public funding"];
-  expect(findExactPhraseMatches("Climate policy depends on public   funding.", phrases)).toEqual(
-    phrases,
-  );
-  expect(
-    resultContainsAllPhrases(
-      {
-        documentId: "doc-1",
-        documentTitle: "Doc",
-        chunkId: "chunk-1",
-        score: 1,
-        snippet: "Climate policy depends on private finance.",
-        exactPhraseMatches: [],
-      },
-      phrases,
-    ),
-  ).toBe(false);
+  expect(findExactPhraseMatches("ＣＬＩＭＡＴＥ   POLICY and Public\nFunding", phrases)).toEqual(phrases);
 });
