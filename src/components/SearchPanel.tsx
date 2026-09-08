@@ -72,7 +72,7 @@ export function SearchPanel({ disabled, request, onSearch }: SearchPanelProps) {
         <label className="checkbox-label">
           <input
             type="checkbox"
-            checked={draft.fuzzy}
+            checked={draft.fuzzy ?? false}
             onChange={(event) =>
               patchDraft({
                 fuzzy: event.target.checked,
