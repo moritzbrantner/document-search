@@ -1,5 +1,5 @@
 import { runTextIndexOperation } from "../wasm/textIndex";
-import { findExactPhraseMatches, parsePhraseQuery, resultContainsAllPhrases } from "./phraseQuery";
+import { findExactPhraseMatches, parsePhraseQuery } from "./phraseQuery";
 import type { ExtractedDocument, SearchRequestState, SearchResultView } from "./types";
 
 interface RawSearchResult {
@@ -7,6 +7,7 @@ interface RawSearchResult {
   documentId?: string;
   score?: number;
   snippet?: string;
+  matchedPhrases?: string[];
   chunk?: {
     id?: string;
     documentId?: string;
@@ -27,26 +28,17 @@ export async function searchCorpus(
     return [];
   }
 
-  const candidateLimits =
-    phrases.length > 0 ? [request.topK, request.topK * 4, request.topK * 12] : [request.topK];
+  const candidates = await runSearch(
+    documents,
+    normalizedSearchText,
+    request.mode,
+    request.topK,
+    phrases,
+  );
 
-  for (const candidateLimit of candidateLimits) {
-    const candidates = await runSearch(
-      documents,
-      normalizedSearchText,
-      request.mode,
-      candidateLimit,
-    );
-    const filtered = candidates
-      .map((candidate) => toSearchResultView(candidate, documents, phrases))
-      .filter((candidate) => resultContainsAllPhrases(candidate, phrases));
-
-    if (filtered.length >= request.topK || candidateLimit === candidateLimits.at(-1)) {
-      return filtered.slice(0, request.topK);
-    }
-  }
-
-  return [];
+  return candidates
+    .map((candidate) => toSearchResultView(candidate, documents, phrases))
+    .slice(0, request.topK);
 }
 
 async function runSearch(
@@ -54,6 +46,7 @@ async function runSearch(
   query: string,
   mode: SearchRequestState["mode"],
   topK: number,
+  requiredPhrases: string[],
 ): Promise<RawSearchResult[]> {
   const response = await runTextIndexOperation({
     operation: "index.search",
@@ -77,6 +70,7 @@ async function runSearch(
         text: query,
         mode,
         topK,
+        requiredPhrases,
         explain: true,
       },
       options: {
@@ -114,6 +108,6 @@ function toSearchResultView(
     score: raw.score ?? 0,
     snippet,
     paragraphOrdinal,
-    exactPhraseMatches: findExactPhraseMatches(snippet, phrases),
+    exactPhraseMatches: raw.matchedPhrases ?? findExactPhraseMatches(snippet, phrases),
   };
 }
