@@ -1,0 +1,37 @@
+name: Validate
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  fast-validation:
+    permissions:
+      contents: read
+      packages: read
+    uses: moritzbrantner/reusable-workflows/.github/workflows/fast-validation.yml@workflow-standard-v1.3
+    with:
+      node_version: "24"
+      bun_version: "1.3.14"
+      install_command: ""
+      pre_command: |
+        git clone --filter=blob:none https://github.com/moritzbrantner/nlp-stack.git ../nlp-stack
+        git -C ../nlp-stack checkout "$(cat .nlp-stack-rev)"
+        rustup toolchain install 1.95.0 --profile minimal
+        rustup target add wasm32-unknown-unknown --toolchain 1.95.0
+        cargo +1.95.0 install wasm-pack --locked --version 0.14.0
+        ./scripts/setup-source-deps
+      format_command: bun run format:check
+      lint_command: bun run lint
+      typecheck_command: bun run typecheck
+      build_command: bun run build
+      unit_test_command: bun test
+      cache_bun: true
+      cache_cargo: false
+      timeout_minutes: 30
