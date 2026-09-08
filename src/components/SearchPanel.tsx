@@ -38,9 +38,10 @@ export function SearchPanel({ disabled, request, onSearch }: SearchPanelProps) {
           Mode
           <select
             value={draft.mode}
-            onChange={(event) =>
-              patchDraft({ mode: event.target.value as SearchRequestState["mode"] })
-            }
+            onChange={(event) => {
+              const mode = event.target.value as SearchRequestState["mode"];
+              patchDraft({ mode, fuzzy: mode === "lexical" ? draft.fuzzy : false });
+            }}
             disabled={disabled}
           >
             <option value="hybrid">Hybrid</option>
@@ -67,6 +68,20 @@ export function SearchPanel({ disabled, request, onSearch }: SearchPanelProps) {
             disabled={disabled}
           />
           Exact quoted phrases
+        </label>
+        <label className="checkbox-label">
+          <input
+            type="checkbox"
+            checked={draft.fuzzy}
+            onChange={(event) =>
+              patchDraft({
+                fuzzy: event.target.checked,
+                ...(event.target.checked ? { mode: "lexical" } : {}),
+              })
+            }
+            disabled={disabled}
+          />
+          Typo-tolerant
         </label>
       </div>
     </form>
