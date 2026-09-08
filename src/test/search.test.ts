@@ -75,6 +75,30 @@ test("required phrases are applied before top-K truncation", async () => {
   expect(results[0]?.exactPhraseMatches).toEqual(["climate policy", "public funding"]);
 });
 
+test("typo-tolerant lexical search recovers a transposed term and reports the correction", async () => {
+  const results = await searchCorpus(
+    [
+      fakeDocument("strategy", "Strategy", "Medieval strategy depends on disciplined formations."),
+      fakeDocument("recipe", "Recipe", "Kitchen recipes depend on ingredients."),
+    ],
+    {
+      query: "stratgey formations",
+      topK: 5,
+      mode: "lexical",
+      requireQuotedPhrases: true,
+      fuzzy: true,
+    },
+  );
+
+  expect(results[0]?.documentId).toBe("strategy");
+  expect(results[0]?.fuzzyMatches).toContainEqual({
+    queryTerm: "stratgey",
+    matchedTerm: "strategy",
+    editDistance: 1,
+    similarity: 0.875,
+  });
+});
+
 test("export/import round-trips CorpusSnapshot", () => {
   const documents = [fakeDocument("doc-1", "Round Trip", "Exported corpus text.")];
   const snapshot = createCorpusSnapshot(documents);
