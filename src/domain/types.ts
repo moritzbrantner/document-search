@@ -43,12 +43,21 @@ export interface ImportPreferences {
   duplicateRule: DuplicateRule;
 }
 
+export interface SearchFilterState {
+  titleContains: string;
+  sourceContains: string;
+  importedFrom: string;
+  importedTo: string;
+  documentIds: string[];
+}
+
 export interface SearchRequestState {
   query: string;
   topK: number;
   mode: "hybrid" | "lexical" | "semantic";
   requireQuotedPhrases: boolean;
   fuzzy?: boolean;
+  filters?: SearchFilterState;
 }
 
 export interface FuzzyTermMatchView {
