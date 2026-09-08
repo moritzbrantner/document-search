@@ -1,4 +1,3 @@
-import type { SearchResultView } from "./types";
 import { normalizeSearchableText } from "./textSegmentation";
 
 export interface ParsedPhraseQuery {
@@ -46,11 +45,4 @@ export function normalizePhrase(value: string): string {
 export function findExactPhraseMatches(text: string, phrases: string[]): string[] {
   const normalizedText = normalizeSearchableText(text);
   return phrases.filter((phrase) => normalizedText.includes(normalizePhrase(phrase)));
-}
-
-export function resultContainsAllPhrases(result: SearchResultView, phrases: string[]): boolean {
-  if (phrases.length === 0) {
-    return true;
-  }
-  return findExactPhraseMatches(result.snippet, phrases).length === phrases.length;
 }
