@@ -13,7 +13,7 @@ export default defineConfig({
     fs: {
       allow: [
         fileURLToPath(new URL(".", import.meta.url)),
-        fileURLToPath(new URL("../rust-packages/packages", import.meta.url)),
+        fileURLToPath(new URL("../nlp-stack/packages", import.meta.url)),
       ],
     },
   },
