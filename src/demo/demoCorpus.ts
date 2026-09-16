@@ -1,11 +1,6 @@
 import { extractHtmlDocument } from "../domain/htmlExtraction";
 import type { ExtractedDocument, HtmlDocumentInput } from "../domain/types";
-import {
-  hasInitializedDemoCorpus,
-  listDocuments,
-  markDemoCorpusInitialized,
-  putDocument,
-} from "../storage/indexedDbStore";
+import { initializeSeedCorpusOnce, shouldSeedCorpus } from "../storage/indexedDbStore";
 
 export const DEMO_DOCUMENT_INPUTS: readonly HtmlDocumentInput[] = [
   {
@@ -90,10 +85,6 @@ export const DEMO_DOCUMENT_INPUTS: readonly HtmlDocumentInput[] = [
   },
 ];
 
-const DEMO_DOCUMENT_IDS = new Set(
-  DEMO_DOCUMENT_INPUTS.flatMap((input) => (input.id ? [input.id] : [])),
-);
-
 export function createDemoDocuments(): ExtractedDocument[] {
   return DEMO_DOCUMENT_INPUTS.map((input) => extractHtmlDocument(input));
 }
@@ -102,29 +93,9 @@ export function shouldSeedDemoCorpus(
   initialized: boolean,
   documents: Array<Pick<ExtractedDocument, "id">>,
 ): boolean {
-  if (initialized) {
-    return false;
-  }
-
-  return (
-    documents.length === 0 || documents.every((document) => DEMO_DOCUMENT_IDS.has(document.id))
-  );
+  return !initialized && shouldSeedCorpus(documents, createDemoDocuments());
 }
 
 export async function initializeDemoCorpus(): Promise<boolean> {
-  const initialized = await hasInitializedDemoCorpus();
-  if (initialized) {
-    return false;
-  }
-
-  const existingDocuments = await listDocuments();
-  const shouldSeed = shouldSeedDemoCorpus(initialized, existingDocuments);
-  if (shouldSeed) {
-    for (const document of createDemoDocuments()) {
-      await putDocument(document);
-    }
-  }
-
-  await markDemoCorpusInitialized();
-  return shouldSeed;
+  return initializeSeedCorpusOnce(createDemoDocuments());
 }
