@@ -81,10 +81,7 @@ function openDatabase(): Promise<IDBDatabase> {
         ? request.transaction?.objectStore(METADATA_STORE)
         : database.createObjectStore(METADATA_STORE);
 
-      if (
-        metadataStore &&
-        shouldMarkDemoCorpusInitializedOnUpgrade(event.oldVersion)
-      ) {
+      if (metadataStore && shouldMarkDemoCorpusInitializedOnUpgrade(event.oldVersion)) {
         metadataStore.put(true, DEMO_CORPUS_INITIALIZED_KEY);
       }
     };
