@@ -106,7 +106,9 @@ export function shouldSeedDemoCorpus(
     return false;
   }
 
-  return documents.length === 0 || documents.every((document) => DEMO_DOCUMENT_IDS.has(document.id));
+  return (
+    documents.length === 0 || documents.every((document) => DEMO_DOCUMENT_IDS.has(document.id))
+  );
 }
 
 export async function initializeDemoCorpus(): Promise<boolean> {
