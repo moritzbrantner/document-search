@@ -45,5 +45,7 @@ test("quoted phrase parser normalizes phrase matching text while preserving sear
 
 test("exact phrase highlighting applies whitespace, case, and NFKC normalization", () => {
   const phrases = ["climate policy", "public funding"];
-  expect(findExactPhraseMatches("ＣＬＩＭＡＴＥ   POLICY and Public\nFunding", phrases)).toEqual(phrases);
+  expect(
+    findExactPhraseMatches("ＣＬＩＭＡＴＥ   POLICY and Public\nFunding", phrases),
+  ).toEqual(phrases);
 });
