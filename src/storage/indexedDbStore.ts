@@ -63,17 +63,29 @@ export async function markDemoCorpusInitialized(): Promise<void> {
   await transactionDone(transaction);
 }
 
+export function shouldMarkDemoCorpusInitializedOnUpgrade(oldVersion: number): boolean {
+  return oldVersion > 0;
+}
+
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
 
-    request.onupgradeneeded = () => {
+    request.onupgradeneeded = (event) => {
       const database = request.result;
       if (!database.objectStoreNames.contains(DOCUMENT_STORE)) {
         database.createObjectStore(DOCUMENT_STORE, { keyPath: "id" });
       }
-      if (!database.objectStoreNames.contains(METADATA_STORE)) {
-        database.createObjectStore(METADATA_STORE);
+
+      const metadataStore = database.objectStoreNames.contains(METADATA_STORE)
+        ? request.transaction?.objectStore(METADATA_STORE)
+        : database.createObjectStore(METADATA_STORE);
+
+      if (
+        metadataStore &&
+        shouldMarkDemoCorpusInitializedOnUpgrade(event.oldVersion)
+      ) {
+        metadataStore.put(true, DEMO_CORPUS_INITIALIZED_KEY);
       }
     };
     request.onsuccess = () => resolve(request.result);
