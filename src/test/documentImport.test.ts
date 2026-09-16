@@ -60,6 +60,20 @@ test("Markdown preserves literal punctuation while removing paired formatting", 
   );
 });
 
+test("Markdown decodes backslash-escaped delimiters without treating them as formatting", () => {
+  const input = parseUploadedDocument({
+    name: "escaped-syntax.md",
+    mimeType: "text/markdown",
+    importedAt: IMPORTED_AT,
+    content: String.raw`Escaped \*literal\*, \_name\_, and \\path remain searchable.`,
+  });
+  const document = extractHtmlDocument(input);
+
+  expect(document.paragraphs[0]?.text).toBe(
+    "Escaped *literal*, _name_, and \\path remain searchable.",
+  );
+});
+
 test("Markdown headings preserve attached hashes and remove closing markers", () => {
   const input = parseUploadedDocument({
     name: "heading-notes.md",
@@ -76,7 +90,7 @@ test("Markdown headings preserve attached hashes and remove closing markers", ()
   ]);
 });
 
-test("plain text is escaped before HTML extraction", () => {
+test("plain text without a MIME type is escaped before HTML extraction", () => {
   const input = parseUploadedDocument({
     name: "meeting.txt",
     importedAt: IMPORTED_AT,
