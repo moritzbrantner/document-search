@@ -1,4 +1,9 @@
 import { useId, useState } from "react";
+import {
+  isSupportedDocument,
+  parseUploadedDocument,
+  SUPPORTED_DOCUMENT_ACCEPT,
+} from "../domain/documentImport";
 import { isDuplicateSourceUri } from "../domain/duplicateRules";
 import type { DuplicateRule, ExtractedDocument, HtmlDocumentInput } from "../domain/types";
 
@@ -115,27 +120,37 @@ export function DocumentImportPanel({
     if (!files?.length) {
       return;
     }
+
     setImportOperation("file");
-    setOperationStatus(`Uploading ${files.length} HTML file(s)...`);
+    setOperationStatus(`Parsing ${files.length} document(s)...`);
     setImportError("");
+
     try {
-      const inputs = await Promise.all(
-        Array.from(files)
-          .filter((file) => /\.html?$/i.test(file.name))
-          .map(async (file) => ({
-            title: file.name.replace(/\.html?$/i, ""),
-            sourceUri: file.name,
-            html: await file.text(),
-            importedAt: new Date().toISOString(),
-          })),
+      const selectedFiles = Array.from(files);
+      const supportedFiles = selectedFiles.filter((file) =>
+        isSupportedDocument(file.name, file.type),
       );
-      if (inputs.length > 0) {
-        setOperationStatus("Importing uploaded HTML...");
-        const result = await onImport(inputs);
-        setOperationStatus(importResultMessage(result));
-      } else {
-        setOperationStatus("No HTML files selected.");
+      const unsupportedCount = selectedFiles.length - supportedFiles.length;
+
+      if (supportedFiles.length === 0) {
+        setOperationStatus("No supported documents selected. Use HTML, Markdown, or plain text.");
+        return;
       }
+
+      const inputs = await Promise.all(
+        supportedFiles.map(async (file) =>
+          parseUploadedDocument({
+            name: file.name,
+            mimeType: file.type,
+            content: await file.text(),
+            importedAt: new Date().toISOString(),
+          }),
+        ),
+      );
+
+      setOperationStatus("Adding parsed documents to the local corpus...");
+      const result = await onImport(inputs);
+      setOperationStatus(importResultMessage(result, unsupportedCount));
     } catch (error: unknown) {
       setImportError(errorMessage(error));
       setOperationStatus("");
@@ -215,16 +230,17 @@ export function DocumentImportPanel({
           {importOperation === "paste" ? "Importing..." : "Import paste"}
         </button>
         <label className="file-button">
-          {importOperation === "file" ? "Uploading..." : "Upload HTML"}
+          {importOperation === "file" ? "Parsing..." : "Upload documents"}
           <input
             type="file"
-            accept=".html,.htm,text/html"
+            accept={SUPPORTED_DOCUMENT_ACCEPT}
             multiple
             disabled={isImporting}
             onChange={(event) => void importFiles(event.target.files)}
           />
         </label>
       </div>
+      <p className="inline-status">Uploads support HTML, Markdown, and plain text files.</p>
       {operationStatus ? <p className="inline-status">{operationStatus}</p> : null}
       {importError ? (
         <p className="inline-error" role="alert">
@@ -238,7 +254,7 @@ export function DocumentImportPanel({
       </div>
       <div className="document-list">
         {documents.length === 0 ? (
-          <div className="empty-row">Paste HTML or upload .html files.</div>
+          <div className="empty-row">Upload HTML, Markdown, or plain text documents.</div>
         ) : (
           documents.map((document) => (
             <div
@@ -287,16 +303,22 @@ function normalizeImportUrl(value: string): string {
   }
 }
 
-function importResultMessage(result: ImportResult): string {
-  if (result.imported === 0 && result.skipped > 0) {
-    return result.skipped === 1
-      ? "Skipped duplicate document."
-      : `Skipped ${result.skipped} duplicate document(s).`;
+function importResultMessage(result: ImportResult, unsupportedCount = 0): string {
+  const parts: string[] = [];
+
+  if (result.imported > 0) {
+    parts.push(`Imported ${result.imported} document(s).`);
+  } else if (result.skipped > 0) {
+    parts.push("No new documents imported.");
   }
   if (result.skipped > 0) {
-    return `Imported ${result.imported} document(s); skipped ${result.skipped} duplicate(s).`;
+    parts.push(`Skipped ${result.skipped} duplicate(s).`);
   }
-  return `Imported ${result.imported} document(s).`;
+  if (unsupportedCount > 0) {
+    parts.push(`Ignored ${unsupportedCount} unsupported file(s).`);
+  }
+
+  return parts.join(" ") || "No documents imported.";
 }
 
 async function fetchHtmlFromUrl(url: string): Promise<{ html: string; url?: string }> {
