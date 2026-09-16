@@ -40,8 +40,11 @@ HTML extraction boundary and stores the extracted documents in IndexedDB
 database `document-search`, object store `documents`. Export/import uses
 `CorpusSnapshot` JSON with `schemaVersion: 1`.
 
-The five demo documents are only seeded when the local corpus is empty. Existing
-browser data is never overwritten by demo initialization.
+The five demo documents are seeded only on a browser profile's first demo
+initialization, and only when the local corpus starts empty. A separate IndexedDB
+initialization marker means clearing the corpus or importing an empty snapshot
+stays empty across reloads. Existing browser data is never overwritten by demo
+initialization.
 
 Search is request-scoped: the stored corpus is transformed into an in-memory
 `text-index-wasm` search request for each query. Paragraph chunking is used so
