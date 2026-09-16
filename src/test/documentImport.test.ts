@@ -45,6 +45,21 @@ Search should keep **ranking authority** in the index.
   ]);
 });
 
+test("Markdown preserves literal punctuation while removing paired formatting", () => {
+  const input = parseUploadedDocument({
+    name: "syntax-notes.md",
+    mimeType: "text/markdown",
+    importedAt: IMPORTED_AT,
+    content:
+      "Use foo_bar and 2 * 3. Keep **ranking authority**, _local state_, ~~old label~~, and `query_id`.",
+  });
+  const document = extractHtmlDocument(input);
+
+  expect(document.paragraphs[0]?.text).toBe(
+    "Use foo_bar and 2 * 3. Keep ranking authority, local state, old label, and query_id.",
+  );
+});
+
 test("plain text is escaped before HTML extraction", () => {
   const input = parseUploadedDocument({
     name: "meeting.txt",
