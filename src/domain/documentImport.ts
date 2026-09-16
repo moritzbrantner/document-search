@@ -124,11 +124,12 @@ function markdownToHtml(markdown: string): string {
       continue;
     }
 
-    const heading = line.match(/^\s*(#{1,6})\s+(.+?)\s*#*\s*$/);
+    const heading = line.match(/^\s*(#{1,6})[ \t]+(.+?)\s*$/);
     if (heading) {
       flushTextBlocks();
       const level = heading[1]?.length ?? 1;
-      html.push(`<h${level}>${escapeHtml(stripInlineMarkdown(heading[2] ?? ""))}</h${level}>`);
+      const headingText = (heading[2] ?? "").replace(/[ \t]+#+[ \t]*$/, "");
+      html.push(`<h${level}>${escapeHtml(stripInlineMarkdown(headingText))}</h${level}>`);
       continue;
     }
 
