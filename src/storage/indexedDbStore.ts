@@ -52,24 +52,58 @@ export async function replaceCorpus(snapshot: CorpusSnapshot): Promise<void> {
   });
 }
 
-export async function hasInitializedDemoCorpus(): Promise<boolean> {
-  return useDatabase(async (database) => {
-    const initialized = await requestToPromise(
-      database
-        .transaction(METADATA_STORE, "readonly")
-        .objectStore(METADATA_STORE)
-        .get(DEMO_CORPUS_INITIALIZED_KEY),
-    );
-    return initialized === true;
-  });
+export async function initializeSeedCorpusOnce(
+  seedDocuments: ExtractedDocument[],
+): Promise<boolean> {
+  return useDatabase(
+    (database) =>
+      new Promise<boolean>((resolve, reject) => {
+        const transaction = database.transaction(
+          [DOCUMENT_STORE, METADATA_STORE],
+          "readwrite",
+        );
+        const documentStore = transaction.objectStore(DOCUMENT_STORE);
+        const metadataStore = transaction.objectStore(METADATA_STORE);
+        let seeded = false;
+
+        transaction.oncomplete = () => resolve(seeded);
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error);
+
+        const initializedRequest = metadataStore.get(DEMO_CORPUS_INITIALIZED_KEY);
+        initializedRequest.onsuccess = () => {
+          if (initializedRequest.result === true) {
+            return;
+          }
+
+          const documentsRequest = documentStore.getAll();
+          documentsRequest.onsuccess = () => {
+            try {
+              seeded = shouldSeedCorpus(documentsRequest.result, seedDocuments);
+              if (seeded) {
+                for (const document of seedDocuments) {
+                  documentStore.put(document);
+                }
+              }
+              metadataStore.put(true, DEMO_CORPUS_INITIALIZED_KEY);
+            } catch {
+              transaction.abort();
+            }
+          };
+        };
+      }),
+  );
 }
 
-export async function markDemoCorpusInitialized(): Promise<void> {
-  await useDatabase(async (database) => {
-    const transaction = database.transaction(METADATA_STORE, "readwrite");
-    transaction.objectStore(METADATA_STORE).put(true, DEMO_CORPUS_INITIALIZED_KEY);
-    await transactionDone(transaction);
-  });
+export function shouldSeedCorpus(
+  existingDocuments: Array<Pick<ExtractedDocument, "id">>,
+  seedDocuments: Array<Pick<ExtractedDocument, "id">>,
+): boolean {
+  const seedDocumentIds = new Set(seedDocuments.map((document) => document.id));
+  return (
+    existingDocuments.length === 0 ||
+    existingDocuments.every((document) => seedDocumentIds.has(document.id))
+  );
 }
 
 export function shouldMarkDemoCorpusInitializedOnUpgrade(oldVersion: number): boolean {
