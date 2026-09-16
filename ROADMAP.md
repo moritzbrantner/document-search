@@ -2,6 +2,13 @@
 
 Document Search should stay local-first and keep retrieval semantics in `nlp-stack` rather than growing a second search engine in the React application.
 
+## Demo and ingestion
+
+1. [x] **Publish a searchable GitHub Pages demo.** Seed a fresh browser with five deterministic documents so search is immediately useful without setup.
+2. [x] **Upload browser-readable documents.** Accept HTML, Markdown, and plain text, normalize them through the existing extraction boundary, persist them in IndexedDB, and include them in search without a server-side corpus.
+3. [ ] **Add richer document formats deliberately.** Add PDF and office-document extraction behind explicit parser adapters, preferably off the main thread, with size limits and regression fixtures before enabling them in the public demo.
+4. [ ] **Make ingestion observability explicit.** Surface parse duration, extracted paragraph counts, rejected files, and index synchronization state without moving ranking policy into the application.
+
 ## Search quality
 
 1. [x] **Make exact-phrase constraints authoritative in `text-index`.** Parse quoted phrases in Document Search, pass them through as `requiredPhrases`, and remove bounded app-side candidate widening/filtering.
