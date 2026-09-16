@@ -183,25 +183,27 @@ export function DocumentImportPanel({
           placeholder="Optional file name or URL"
         />
       </div>
-      <div className="field-stack">
-        <label htmlFor={urlId}>URL</label>
-        <div className="url-import-row">
-          <input
-            id={urlId}
-            value={sourceUrl}
-            onChange={(event) => setSourceUrl(event.target.value)}
-            placeholder="https://example.com/article"
-            type="url"
-          />
-          <button
-            type="button"
-            onClick={importUrl}
-            disabled={isImporting || !normalizeImportUrl(sourceUrl)}
-          >
-            {importOperation === "url" ? "Importing..." : "Import URL"}
-          </button>
+      {import.meta.env.DEV ? (
+        <div className="field-stack">
+          <label htmlFor={urlId}>URL</label>
+          <div className="url-import-row">
+            <input
+              id={urlId}
+              value={sourceUrl}
+              onChange={(event) => setSourceUrl(event.target.value)}
+              placeholder="https://example.com/article"
+              type="url"
+            />
+            <button
+              type="button"
+              onClick={importUrl}
+              disabled={isImporting || !normalizeImportUrl(sourceUrl)}
+            >
+              {importOperation === "url" ? "Importing..." : "Import URL"}
+            </button>
+          </div>
         </div>
-      </div>
+      ) : null}
       <div className="field-stack">
         <label htmlFor={htmlId}>HTML</label>
         <textarea
