@@ -12,7 +12,23 @@ export interface UploadedDocumentSource {
   importedAt: string;
 }
 
-const MARKDOWN_ESCAPABLE_CHARACTERS = new Set(["\\", "`", "*", "_", "~", "[", "]", "(", ")", "!", "#", "+", "-", ".", ">"]);
+const MARKDOWN_ESCAPABLE_CHARACTERS = new Set([
+  "\\",
+  "`",
+  "*",
+  "_",
+  "~",
+  "[",
+  "]",
+  "(",
+  ")",
+  "!",
+  "#",
+  "+",
+  "-",
+  ".",
+  ">",
+]);
 
 export function isSupportedDocument(name: string, mimeType = ""): boolean {
   return inferDocumentFormat(name, mimeType) !== undefined;
@@ -211,7 +227,10 @@ function protectMarkdownEscapes(text: string): { text: string; literals: string[
 }
 
 function restoreMarkdownEscapes(text: string, literals: string[]): string {
-  return text.replace(/\uE000(\d+)\uE001/g, (_match, index: string) => literals[Number(index)] ?? "");
+  return text.replace(
+    /\uE000(\d+)\uE001/g,
+    (_match, index: string) => literals[Number(index)] ?? "",
+  );
 }
 
 function splitParagraphs(text: string): string[] {
