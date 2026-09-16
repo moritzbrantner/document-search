@@ -146,7 +146,9 @@ function findMostOverlappingParagraph(
   let bestScore = 0;
 
   for (const paragraph of paragraphs) {
-    const paragraphTerms = new Set(normalizeSearchableText(paragraph.text).match(/[a-z0-9]+/g) ?? []);
+    const paragraphTerms = new Set(
+      normalizeSearchableText(paragraph.text).match(/[a-z0-9]+/g) ?? [],
+    );
     const score = Array.from(snippetTerms).filter((term) => paragraphTerms.has(term)).length;
     if (score > bestScore) {
       bestParagraph = paragraph;
