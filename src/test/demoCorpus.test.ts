@@ -1,5 +1,9 @@
 import { expect, test } from "bun:test";
-import { createDemoDocuments, DEMO_DOCUMENT_INPUTS } from "../demo/demoCorpus";
+import {
+  createDemoDocuments,
+  DEMO_DOCUMENT_INPUTS,
+  shouldSeedDemoCorpus,
+} from "../demo/demoCorpus";
 
 test("the demo corpus contains five deterministic searchable documents", () => {
   const documents = createDemoDocuments();
@@ -14,4 +18,11 @@ test("the demo corpus contains five deterministic searchable documents", () => {
     expect(document.paragraphs.length).toBeGreaterThanOrEqual(3);
     expect(document.text.length).toBeGreaterThan(100);
   }
+});
+
+test("demo documents seed only on the first empty-corpus initialization", () => {
+  expect(shouldSeedDemoCorpus(false, 0)).toBe(true);
+  expect(shouldSeedDemoCorpus(false, 3)).toBe(false);
+  expect(shouldSeedDemoCorpus(true, 0)).toBe(false);
+  expect(shouldSeedDemoCorpus(true, 5)).toBe(false);
 });
