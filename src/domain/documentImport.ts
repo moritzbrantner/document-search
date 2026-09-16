@@ -12,6 +12,8 @@ export interface UploadedDocumentSource {
   importedAt: string;
 }
 
+const MARKDOWN_ESCAPABLE_CHARACTERS = new Set(["\\", "`", "*", "_", "~", "[", "]", "(", ")", "!", "#", "+", "-", ".", ">"]);
+
 export function isSupportedDocument(name: string, mimeType = ""): boolean {
   return inferDocumentFormat(name, mimeType) !== undefined;
 }
@@ -30,7 +32,7 @@ export function parseUploadedDocument(source: UploadedDocumentSource): HtmlDocum
   };
 }
 
-function inferDocumentFormat(name: string, mimeType: string): UploadedDocumentFormat | undefined {
+function inferDocumentFormat(name: string, mimeType = ""): UploadedDocumentFormat | undefined {
   const lowerName = name.toLowerCase();
   const normalizedMimeType = mimeType.toLowerCase().split(";", 1)[0]?.trim() ?? "";
 
@@ -174,7 +176,8 @@ function markdownToHtml(markdown: string): string {
 }
 
 function stripInlineMarkdown(text: string): string {
-  return text
+  const protectedEscapes = protectMarkdownEscapes(text);
+  const stripped = protectedEscapes.text
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/`([^`\n]+)`/g, "$1")
@@ -184,6 +187,31 @@ function stripInlineMarkdown(text: string): string {
     .replace(/\*(\S(?:[^*\n]*?\S)?)\*/g, "$1")
     .replace(/(^|[^A-Za-z0-9])_(\S(?:[^_\n]*?\S)?)_(?=$|[^A-Za-z0-9])/g, "$1$2")
     .trim();
+
+  return restoreMarkdownEscapes(stripped, protectedEscapes.literals);
+}
+
+function protectMarkdownEscapes(text: string): { text: string; literals: string[] } {
+  const literals: string[] = [];
+  let protectedText = "";
+
+  for (let index = 0; index < text.length; index += 1) {
+    const character = text[index] ?? "";
+    const nextCharacter = text[index + 1];
+    if (character === "\\" && nextCharacter && MARKDOWN_ESCAPABLE_CHARACTERS.has(nextCharacter)) {
+      const literalIndex = literals.push(nextCharacter) - 1;
+      protectedText += `\uE000${literalIndex}\uE001`;
+      index += 1;
+      continue;
+    }
+    protectedText += character;
+  }
+
+  return { text: protectedText, literals };
+}
+
+function restoreMarkdownEscapes(text: string, literals: string[]): string {
+  return text.replace(/\uE000(\d+)\uE001/g, (_match, index: string) => literals[Number(index)] ?? "");
 }
 
 function splitParagraphs(text: string): string[] {
