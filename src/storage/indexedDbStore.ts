@@ -58,10 +58,7 @@ export async function initializeSeedCorpusOnce(
   return useDatabase(
     (database) =>
       new Promise<boolean>((resolve, reject) => {
-        const transaction = database.transaction(
-          [DOCUMENT_STORE, METADATA_STORE],
-          "readwrite",
-        );
+        const transaction = database.transaction([DOCUMENT_STORE, METADATA_STORE], "readwrite");
         const documentStore = transaction.objectStore(DOCUMENT_STORE);
         const metadataStore = transaction.objectStore(METADATA_STORE);
         let seeded = false;
