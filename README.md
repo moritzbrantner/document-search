@@ -1,8 +1,14 @@
 # Document Search
 
-Local-first HTML document search app built with Bun, Vite, React, TypeScript,
+Local-first document search app built with Bun, Vite, React, TypeScript,
 IndexedDB, and the text WASM packages from the sibling `nlp-stack` source
 checkout. Development does not wait for npm publication.
+
+The GitHub Pages build is a usable browser demo. A fresh browser corpus starts
+with five deterministic demo documents, and users can add their own HTML,
+Markdown, or plain-text files. Uploaded files are parsed in the browser, stored
+in IndexedDB, and included in subsequent searches without sending the corpus to
+a hosted search service.
 
 ## Setup
 
@@ -29,10 +35,15 @@ bun run build
 
 ## Data Model
 
-The app stores extracted HTML documents in IndexedDB database
-`document-search`, object store `documents`. Export/import uses
+The app normalizes imported HTML, Markdown, and plain text through the existing
+HTML extraction boundary and stores the extracted documents in IndexedDB
+database `document-search`, object store `documents`. Export/import uses
 `CorpusSnapshot` JSON with `schemaVersion: 1`.
+
+The five demo documents are only seeded when the local corpus is empty. Existing
+browser data is never overwritten by demo initialization.
 
 Search is request-scoped: the stored corpus is transformed into an in-memory
 `text-index-wasm` search request for each query. Paragraph chunking is used so
-results map back to extracted HTML paragraphs.
+results map back to extracted document paragraphs. `nlp-stack` remains
+authoritative for retrieval and ranking semantics.
