@@ -192,19 +192,37 @@ function markdownToHtml(markdown: string): string {
 }
 
 function stripInlineMarkdown(text: string): string {
-  const protectedEscapes = protectMarkdownEscapes(text);
+  const protectedCode = protectInlineCode(text);
+  const protectedEscapes = protectMarkdownEscapes(protectedCode.text);
   const stripped = protectedEscapes.text
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/`([^`\n]+)`/g, "$1")
     .replace(/\*\*(\S(?:[^*\n]*?\S)?)\*\*/g, "$1")
     .replace(/(^|[^A-Za-z0-9])__(\S(?:[^_\n]*?\S)?)__(?=$|[^A-Za-z0-9])/g, "$1$2")
     .replace(/~~(\S(?:[^~\n]*?\S)?)~~/g, "$1")
     .replace(/\*(\S(?:[^*\n]*?\S)?)\*/g, "$1")
     .replace(/(^|[^A-Za-z0-9])_(\S(?:[^_\n]*?\S)?)_(?=$|[^A-Za-z0-9])/g, "$1$2")
     .trim();
+  const withEscapesRestored = restoreMarkdownEscapes(stripped, protectedEscapes.literals);
+  return restoreInlineCode(withEscapesRestored, protectedCode.literals);
+}
 
-  return restoreMarkdownEscapes(stripped, protectedEscapes.literals);
+function protectInlineCode(text: string): { text: string; literals: string[] } {
+  const literals: string[] = [];
+  return {
+    text: text.replace(/`([^`\n]+)`/g, (_match, literal: string) => {
+      const literalIndex = literals.push(literal) - 1;
+      return `\uE002${literalIndex}\uE003`;
+    }),
+    literals,
+  };
+}
+
+function restoreInlineCode(text: string, literals: string[]): string {
+  return text.replace(
+    /\uE002(\d+)\uE003/g,
+    (_match, index: string) => literals[Number(index)] ?? "",
+  );
 }
 
 function protectMarkdownEscapes(text: string): { text: string; literals: string[] } {
