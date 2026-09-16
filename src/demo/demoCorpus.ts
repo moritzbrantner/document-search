@@ -1,6 +1,11 @@
 import { extractHtmlDocument } from "../domain/htmlExtraction";
 import type { ExtractedDocument, HtmlDocumentInput } from "../domain/types";
-import { listDocuments, putDocument } from "../storage/indexedDbStore";
+import {
+  hasInitializedDemoCorpus,
+  listDocuments,
+  markDemoCorpusInitialized,
+  putDocument,
+} from "../storage/indexedDbStore";
 
 export const DEMO_DOCUMENT_INPUTS: readonly HtmlDocumentInput[] = [
   {
@@ -89,14 +94,24 @@ export function createDemoDocuments(): ExtractedDocument[] {
   return DEMO_DOCUMENT_INPUTS.map((input) => extractHtmlDocument(input));
 }
 
+export function shouldSeedDemoCorpus(initialized: boolean, documentCount: number): boolean {
+  return !initialized && documentCount === 0;
+}
+
 export async function seedDemoCorpusIfEmpty(): Promise<boolean> {
-  const existingDocuments = await listDocuments();
-  if (existingDocuments.length > 0) {
+  const initialized = await hasInitializedDemoCorpus();
+  if (initialized) {
     return false;
   }
 
-  for (const document of createDemoDocuments()) {
-    await putDocument(document);
+  const existingDocuments = await listDocuments();
+  const shouldSeed = shouldSeedDemoCorpus(initialized, existingDocuments.length);
+  if (shouldSeed) {
+    for (const document of createDemoDocuments()) {
+      await putDocument(document);
+    }
   }
-  return true;
+
+  await markDemoCorpusInitialized();
+  return shouldSeed;
 }
