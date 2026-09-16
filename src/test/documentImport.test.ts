@@ -60,6 +60,21 @@ test("Markdown preserves literal punctuation while removing paired formatting", 
   );
 });
 
+test("Markdown inline code preserves formatting punctuation as searchable text", () => {
+  const input = parseUploadedDocument({
+    name: "code-notes.md",
+    mimeType: "text/markdown",
+    importedAt: IMPORTED_AT,
+    content:
+      "Keep `*literal*`, `_name_`, `[label](target)`, and `\\*escaped\\*` as code.",
+  });
+  const document = extractHtmlDocument(input);
+
+  expect(document.paragraphs[0]?.text).toBe(
+    "Keep *literal*, _name_, [label](target), and \\*escaped\\* as code.",
+  );
+});
+
 test("Markdown decodes backslash-escaped delimiters without treating them as formatting", () => {
   const input = parseUploadedDocument({
     name: "escaped-syntax.md",
