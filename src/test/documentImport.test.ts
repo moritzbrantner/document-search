@@ -60,6 +60,22 @@ test("Markdown preserves literal punctuation while removing paired formatting", 
   );
 });
 
+test("Markdown headings preserve attached hashes and remove closing markers", () => {
+  const input = parseUploadedDocument({
+    name: "heading-notes.md",
+    mimeType: "text/markdown",
+    importedAt: IMPORTED_AT,
+    content: "# C#\n\n## issue#\n\n### Closed heading ###",
+  });
+  const document = extractHtmlDocument(input);
+
+  expect(document.paragraphs.map((paragraph) => paragraph.text)).toEqual([
+    "C#",
+    "issue#",
+    "Closed heading",
+  ]);
+});
+
 test("plain text is escaped before HTML extraction", () => {
   const input = parseUploadedDocument({
     name: "meeting.txt",
