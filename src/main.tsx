@@ -7,16 +7,14 @@ import { initializeDemoCorpus } from "./demo/demoCorpus";
 
 const queryClient = new QueryClient();
 
-void bootstrap();
+createRoot(document.getElementById("root")!).render(
+  <StrictMode>
+    <QueryClientProvider client={queryClient}>
+      <App />
+    </QueryClientProvider>
+  </StrictMode>,
+);
 
-async function bootstrap() {
-  await initializeDemoCorpus().catch(() => false);
-
-  createRoot(document.getElementById("root")!).render(
-    <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <App />
-      </QueryClientProvider>
-    </StrictMode>,
-  );
-}
+void initializeDemoCorpus()
+  .then(() => queryClient.invalidateQueries({ queryKey: ["documents"] }))
+  .catch(() => undefined);
