@@ -1,8 +1,10 @@
 import type { CorpusSnapshot, ExtractedDocument } from "../domain/types";
 
 const DB_NAME = "document-search";
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 const DOCUMENT_STORE = "documents";
+const METADATA_STORE = "metadata";
+const DEMO_CORPUS_INITIALIZED_KEY = "demo-corpus-initialized";
 
 export async function listDocuments(): Promise<ExtractedDocument[]> {
   const database = await openDatabase();
@@ -43,6 +45,24 @@ export async function replaceCorpus(snapshot: CorpusSnapshot): Promise<void> {
   await transactionDone(transaction);
 }
 
+export async function hasInitializedDemoCorpus(): Promise<boolean> {
+  const database = await openDatabase();
+  const initialized = await requestToPromise(
+    database
+      .transaction(METADATA_STORE, "readonly")
+      .objectStore(METADATA_STORE)
+      .get(DEMO_CORPUS_INITIALIZED_KEY),
+  );
+  return initialized === true;
+}
+
+export async function markDemoCorpusInitialized(): Promise<void> {
+  const database = await openDatabase();
+  const transaction = database.transaction(METADATA_STORE, "readwrite");
+  transaction.objectStore(METADATA_STORE).put(true, DEMO_CORPUS_INITIALIZED_KEY);
+  await transactionDone(transaction);
+}
+
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
@@ -51,6 +71,9 @@ function openDatabase(): Promise<IDBDatabase> {
       const database = request.result;
       if (!database.objectStoreNames.contains(DOCUMENT_STORE)) {
         database.createObjectStore(DOCUMENT_STORE, { keyPath: "id" });
+      }
+      if (!database.objectStoreNames.contains(METADATA_STORE)) {
+        database.createObjectStore(METADATA_STORE);
       }
     };
     request.onsuccess = () => resolve(request.result);
