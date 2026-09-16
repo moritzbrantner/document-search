@@ -5,71 +5,90 @@ const DB_VERSION = 2;
 const DOCUMENT_STORE = "documents";
 const METADATA_STORE = "metadata";
 const DEMO_CORPUS_INITIALIZED_KEY = "demo-corpus-initialized";
+const BLOCKED_UPGRADE_MESSAGE =
+  "Local corpus upgrade is blocked by another open Document Search tab. Close other tabs and reload.";
 
 export async function listDocuments(): Promise<ExtractedDocument[]> {
-  const database = await openDatabase();
-  return requestToPromise(
-    database.transaction(DOCUMENT_STORE, "readonly").objectStore(DOCUMENT_STORE).getAll(),
+  return useDatabase((database) =>
+    requestToPromise(
+      database.transaction(DOCUMENT_STORE, "readonly").objectStore(DOCUMENT_STORE).getAll(),
+    ),
   );
 }
 
 export async function putDocument(document: ExtractedDocument): Promise<void> {
-  const database = await openDatabase();
-  const transaction = database.transaction(DOCUMENT_STORE, "readwrite");
-  transaction.objectStore(DOCUMENT_STORE).put(document);
-  await transactionDone(transaction);
+  await useDatabase(async (database) => {
+    const transaction = database.transaction(DOCUMENT_STORE, "readwrite");
+    transaction.objectStore(DOCUMENT_STORE).put(document);
+    await transactionDone(transaction);
+  });
 }
 
 export async function deleteDocument(id: string): Promise<void> {
-  const database = await openDatabase();
-  const transaction = database.transaction(DOCUMENT_STORE, "readwrite");
-  transaction.objectStore(DOCUMENT_STORE).delete(id);
-  await transactionDone(transaction);
+  await useDatabase(async (database) => {
+    const transaction = database.transaction(DOCUMENT_STORE, "readwrite");
+    transaction.objectStore(DOCUMENT_STORE).delete(id);
+    await transactionDone(transaction);
+  });
 }
 
 export async function clearCorpus(): Promise<void> {
-  const database = await openDatabase();
-  const transaction = database.transaction(DOCUMENT_STORE, "readwrite");
-  transaction.objectStore(DOCUMENT_STORE).clear();
-  await transactionDone(transaction);
+  await useDatabase(async (database) => {
+    const transaction = database.transaction(DOCUMENT_STORE, "readwrite");
+    transaction.objectStore(DOCUMENT_STORE).clear();
+    await transactionDone(transaction);
+  });
 }
 
 export async function replaceCorpus(snapshot: CorpusSnapshot): Promise<void> {
-  const database = await openDatabase();
-  const transaction = database.transaction(DOCUMENT_STORE, "readwrite");
-  const store = transaction.objectStore(DOCUMENT_STORE);
-  store.clear();
-  for (const document of snapshot.documents) {
-    store.put(document);
-  }
-  await transactionDone(transaction);
+  await useDatabase(async (database) => {
+    const transaction = database.transaction(DOCUMENT_STORE, "readwrite");
+    const store = transaction.objectStore(DOCUMENT_STORE);
+    store.clear();
+    for (const document of snapshot.documents) {
+      store.put(document);
+    }
+    await transactionDone(transaction);
+  });
 }
 
 export async function hasInitializedDemoCorpus(): Promise<boolean> {
-  const database = await openDatabase();
-  const initialized = await requestToPromise(
-    database
-      .transaction(METADATA_STORE, "readonly")
-      .objectStore(METADATA_STORE)
-      .get(DEMO_CORPUS_INITIALIZED_KEY),
-  );
-  return initialized === true;
+  return useDatabase(async (database) => {
+    const initialized = await requestToPromise(
+      database
+        .transaction(METADATA_STORE, "readonly")
+        .objectStore(METADATA_STORE)
+        .get(DEMO_CORPUS_INITIALIZED_KEY),
+    );
+    return initialized === true;
+  });
 }
 
 export async function markDemoCorpusInitialized(): Promise<void> {
-  const database = await openDatabase();
-  const transaction = database.transaction(METADATA_STORE, "readwrite");
-  transaction.objectStore(METADATA_STORE).put(true, DEMO_CORPUS_INITIALIZED_KEY);
-  await transactionDone(transaction);
+  await useDatabase(async (database) => {
+    const transaction = database.transaction(METADATA_STORE, "readwrite");
+    transaction.objectStore(METADATA_STORE).put(true, DEMO_CORPUS_INITIALIZED_KEY);
+    await transactionDone(transaction);
+  });
 }
 
 export function shouldMarkDemoCorpusInitializedOnUpgrade(oldVersion: number): boolean {
   return oldVersion > 0;
 }
 
+async function useDatabase<T>(operation: (database: IDBDatabase) => Promise<T>): Promise<T> {
+  const database = await openDatabase();
+  try {
+    return await operation(database);
+  } finally {
+    database.close();
+  }
+}
+
 function openDatabase(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const request = indexedDB.open(DB_NAME, DB_VERSION);
+    let blocked = false;
 
     request.onupgradeneeded = (event) => {
       const database = request.result;
@@ -85,7 +104,19 @@ function openDatabase(): Promise<IDBDatabase> {
         metadataStore.put(true, DEMO_CORPUS_INITIALIZED_KEY);
       }
     };
-    request.onsuccess = () => resolve(request.result);
+    request.onblocked = () => {
+      blocked = true;
+      reject(new Error(BLOCKED_UPGRADE_MESSAGE));
+    };
+    request.onsuccess = () => {
+      const database = request.result;
+      database.onversionchange = () => database.close();
+      if (blocked) {
+        database.close();
+        return;
+      }
+      resolve(database);
+    };
     request.onerror = () => reject(request.error);
   });
 }
