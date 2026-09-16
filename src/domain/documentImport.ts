@@ -176,7 +176,12 @@ function stripInlineMarkdown(text: string): string {
   return text
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
-    .replace(/[*_~`]/g, "")
+    .replace(/`([^`\n]+)`/g, "$1")
+    .replace(/\*\*(\S(?:[^*\n]*?\S)?)\*\*/g, "$1")
+    .replace(/(^|[^A-Za-z0-9])__(\S(?:[^_\n]*?\S)?)__(?=$|[^A-Za-z0-9])/g, "$1$2")
+    .replace(/~~(\S(?:[^~\n]*?\S)?)~~/g, "$1")
+    .replace(/\*(\S(?:[^*\n]*?\S)?)\*/g, "$1")
+    .replace(/(^|[^A-Za-z0-9])_(\S(?:[^_\n]*?\S)?)_(?=$|[^A-Za-z0-9])/g, "$1$2")
     .trim();
 }
 
