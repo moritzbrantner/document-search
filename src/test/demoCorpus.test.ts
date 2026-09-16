@@ -20,9 +20,12 @@ test("the demo corpus contains five deterministic searchable documents", () => {
   }
 });
 
-test("demo documents seed only on the first empty-corpus initialization", () => {
-  expect(shouldSeedDemoCorpus(false, 0)).toBe(true);
-  expect(shouldSeedDemoCorpus(false, 3)).toBe(false);
-  expect(shouldSeedDemoCorpus(true, 0)).toBe(false);
-  expect(shouldSeedDemoCorpus(true, 5)).toBe(false);
+test("demo initialization seeds a new corpus and repairs interrupted seeding", () => {
+  const demoDocuments = createDemoDocuments();
+
+  expect(shouldSeedDemoCorpus(false, [])).toBe(true);
+  expect(shouldSeedDemoCorpus(false, demoDocuments.slice(0, 2))).toBe(true);
+  expect(shouldSeedDemoCorpus(false, [{ id: "user-document" }])).toBe(false);
+  expect(shouldSeedDemoCorpus(true, [])).toBe(false);
+  expect(shouldSeedDemoCorpus(true, demoDocuments)).toBe(false);
 });
