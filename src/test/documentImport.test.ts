@@ -65,8 +65,7 @@ test("Markdown inline code preserves formatting punctuation as searchable text",
     name: "code-notes.md",
     mimeType: "text/markdown",
     importedAt: IMPORTED_AT,
-    content:
-      "Keep `*literal*`, `_name_`, `[label](target)`, and `\\*escaped\\*` as code.",
+    content: "Keep `*literal*`, `_name_`, `[label](target)`, and `\\*escaped\\*` as code.",
   });
   const document = extractHtmlDocument(input);
 
