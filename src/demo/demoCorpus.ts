@@ -90,22 +90,33 @@ export const DEMO_DOCUMENT_INPUTS: readonly HtmlDocumentInput[] = [
   },
 ];
 
+const DEMO_DOCUMENT_IDS = new Set(
+  DEMO_DOCUMENT_INPUTS.flatMap((input) => (input.id ? [input.id] : [])),
+);
+
 export function createDemoDocuments(): ExtractedDocument[] {
   return DEMO_DOCUMENT_INPUTS.map((input) => extractHtmlDocument(input));
 }
 
-export function shouldSeedDemoCorpus(initialized: boolean, documentCount: number): boolean {
-  return !initialized && documentCount === 0;
+export function shouldSeedDemoCorpus(
+  initialized: boolean,
+  documents: Array<Pick<ExtractedDocument, "id">>,
+): boolean {
+  if (initialized) {
+    return false;
+  }
+
+  return documents.length === 0 || documents.every((document) => DEMO_DOCUMENT_IDS.has(document.id));
 }
 
-export async function seedDemoCorpusIfEmpty(): Promise<boolean> {
+export async function initializeDemoCorpus(): Promise<boolean> {
   const initialized = await hasInitializedDemoCorpus();
   if (initialized) {
     return false;
   }
 
   const existingDocuments = await listDocuments();
-  const shouldSeed = shouldSeedDemoCorpus(initialized, existingDocuments.length);
+  const shouldSeed = shouldSeedDemoCorpus(initialized, existingDocuments);
   if (shouldSeed) {
     for (const document of createDemoDocuments()) {
       await putDocument(document);
