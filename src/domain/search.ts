@@ -1,8 +1,10 @@
 import { runTextIndexOperation } from "../wasm/textIndex";
 import { findExactPhraseMatches, parsePhraseQuery } from "./phraseQuery";
+import { normalizeSearchableText } from "./textSegmentation";
 import type {
   ExtractedDocument,
   FuzzyTermMatchView,
+  SearchFilterState,
   SearchRequestState,
   SearchResultView,
 } from "./types";
@@ -43,6 +45,11 @@ export async function searchCorpus(
     return [];
   }
 
+  const documentIds = resolveSearchDocumentIds(documents, request.filters);
+  if (documentIds?.length === 0) {
+    return [];
+  }
+
   const candidates = await runSearch(
     documents,
     normalizedSearchText,
@@ -50,11 +57,67 @@ export async function searchCorpus(
     request.topK,
     phrases,
     request.fuzzy === true && request.mode === "lexical",
+    documentIds,
   );
 
   return candidates
     .map((candidate) => toSearchResultView(candidate, documents, phrases))
     .slice(0, request.topK);
+}
+
+export function resolveSearchDocumentIds(
+  documents: ExtractedDocument[],
+  filters?: SearchFilterState,
+): string[] | undefined {
+  if (!filters || !hasActiveFilters(filters)) {
+    return undefined;
+  }
+
+  const selectedIds = new Set(filters.documentIds);
+  const titleNeedle = normalizeSearchableText(filters.titleContains);
+  const sourceNeedle = normalizeSearchableText(filters.sourceContains);
+  const invalidDateRange =
+    filters.importedFrom !== "" &&
+    filters.importedTo !== "" &&
+    filters.importedFrom > filters.importedTo;
+  if (invalidDateRange) {
+    return [];
+  }
+
+  return documents
+    .filter((document) => {
+      if (selectedIds.size > 0 && !selectedIds.has(document.id)) {
+        return false;
+      }
+      if (titleNeedle && !normalizeSearchableText(document.title).includes(titleNeedle)) {
+        return false;
+      }
+      if (
+        sourceNeedle &&
+        !normalizeSearchableText(document.sourceUri ?? "").includes(sourceNeedle)
+      ) {
+        return false;
+      }
+      const importedDate = document.importedAt.slice(0, 10);
+      if (filters.importedFrom && importedDate < filters.importedFrom) {
+        return false;
+      }
+      if (filters.importedTo && importedDate > filters.importedTo) {
+        return false;
+      }
+      return true;
+    })
+    .map((document) => document.id);
+}
+
+function hasActiveFilters(filters: SearchFilterState): boolean {
+  return (
+    filters.titleContains.trim() !== "" ||
+    filters.sourceContains.trim() !== "" ||
+    filters.importedFrom !== "" ||
+    filters.importedTo !== "" ||
+    filters.documentIds.length > 0
+  );
 }
 
 async function runSearch(
@@ -64,6 +127,7 @@ async function runSearch(
   topK: number,
   requiredPhrases: string[],
   fuzzy: boolean,
+  documentIds?: string[],
 ): Promise<RawSearchResult[]> {
   const response = await runTextIndexOperation({
     operation: "index.search",
@@ -89,6 +153,9 @@ async function runSearch(
         topK,
         requiredPhrases,
         explain: true,
+        filter: {
+          documentIds: documentIds ?? [],
+        },
         ...(fuzzy ? { fuzzy: FUZZY_SEARCH_OPTIONS } : {}),
       },
       options: {
