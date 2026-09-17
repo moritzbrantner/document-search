@@ -9,7 +9,7 @@ const BLOCKED_UPGRADE_MESSAGE =
   "Local corpus upgrade is blocked by another open Document Search tab. Close other tabs and reload.";
 
 export async function listDocuments(): Promise<ExtractedDocument[]> {
-  return useDatabase((database) =>
+  return withDatabase((database) =>
     requestToPromise(
       database.transaction(DOCUMENT_STORE, "readonly").objectStore(DOCUMENT_STORE).getAll(),
     ),
@@ -17,7 +17,7 @@ export async function listDocuments(): Promise<ExtractedDocument[]> {
 }
 
 export async function putDocument(document: ExtractedDocument): Promise<void> {
-  await useDatabase(async (database) => {
+  await withDatabase(async (database) => {
     const transaction = database.transaction(DOCUMENT_STORE, "readwrite");
     transaction.objectStore(DOCUMENT_STORE).put(document);
     await transactionDone(transaction);
@@ -25,7 +25,7 @@ export async function putDocument(document: ExtractedDocument): Promise<void> {
 }
 
 export async function deleteDocument(id: string): Promise<void> {
-  await useDatabase(async (database) => {
+  await withDatabase(async (database) => {
     const transaction = database.transaction(DOCUMENT_STORE, "readwrite");
     transaction.objectStore(DOCUMENT_STORE).delete(id);
     await transactionDone(transaction);
@@ -33,7 +33,7 @@ export async function deleteDocument(id: string): Promise<void> {
 }
 
 export async function clearCorpus(): Promise<void> {
-  await useDatabase(async (database) => {
+  await withDatabase(async (database) => {
     const transaction = database.transaction(DOCUMENT_STORE, "readwrite");
     transaction.objectStore(DOCUMENT_STORE).clear();
     await transactionDone(transaction);
@@ -41,7 +41,7 @@ export async function clearCorpus(): Promise<void> {
 }
 
 export async function replaceCorpus(snapshot: CorpusSnapshot): Promise<void> {
-  await useDatabase(async (database) => {
+  await withDatabase(async (database) => {
     const transaction = database.transaction(DOCUMENT_STORE, "readwrite");
     const store = transaction.objectStore(DOCUMENT_STORE);
     store.clear();
@@ -55,7 +55,7 @@ export async function replaceCorpus(snapshot: CorpusSnapshot): Promise<void> {
 export async function initializeSeedCorpusOnce(
   seedDocuments: ExtractedDocument[],
 ): Promise<boolean> {
-  return useDatabase(
+  return withDatabase(
     (database) =>
       new Promise<boolean>((resolve, reject) => {
         const transaction = database.transaction([DOCUMENT_STORE, METADATA_STORE], "readwrite");
@@ -107,7 +107,7 @@ export function shouldMarkDemoCorpusInitializedOnUpgrade(oldVersion: number): bo
   return oldVersion > 0;
 }
 
-async function useDatabase<T>(operation: (database: IDBDatabase) => Promise<T>): Promise<T> {
+async function withDatabase<T>(operation: (database: IDBDatabase) => Promise<T>): Promise<T> {
   const database = await openDatabase();
   try {
     return await operation(database);
