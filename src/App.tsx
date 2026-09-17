@@ -37,6 +37,13 @@ const DEFAULT_SEARCH_REQUEST: SearchRequestState = {
   topK: 10,
   mode: "hybrid",
   requireQuotedPhrases: true,
+  filters: {
+    titleContains: "",
+    sourceContains: "",
+    importedFrom: "",
+    importedTo: "",
+    documentIds: [],
+  },
 };
 const DOCUMENTS_QUERY_KEY = ["documents"] as const;
 const EMPTY_DOCUMENTS: ExtractedDocument[] = [];
@@ -252,6 +259,7 @@ function App() {
         </div>
         <SearchPanel
           disabled={documents.length === 0 || searchMutation.isPending}
+          documents={documents}
           request={searchRequest}
           onSearch={runSearch}
         />
