@@ -142,10 +142,7 @@ export function SearchPanel({ disabled, documents, request, onSearch }: SearchPa
               value={filters.documentIds}
               onChange={(event) =>
                 patchFilters({
-                  documentIds: Array.from(
-                    event.target.selectedOptions,
-                    (option) => option.value,
-                  ),
+                  documentIds: Array.from(event.target.selectedOptions, (option) => option.value),
                 })
               }
               disabled={disabled}
