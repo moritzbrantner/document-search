@@ -198,10 +198,10 @@ function stripInlineMarkdown(text: string): string {
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/\*\*(\S(?:[^*\n]*?\S)?)\*\*/g, "$1")
-    .replace(/(^|[^A-Za-z0-9])__(\S(?:[^_\n]*?\S)?)__(?=$|[^A-Za-z0-9])/g, "$1$2")
+    .replace(/(^|[^\p{L}\p{N}])__(\S(?:[^_\n]*?\S)?)__(?=$|[^\p{L}\p{N}])/gu, "$1$2")
     .replace(/~~(\S(?:[^~\n]*?\S)?)~~/g, "$1")
     .replace(/\*(\S(?:[^*\n]*?\S)?)\*/g, "$1")
-    .replace(/(^|[^A-Za-z0-9])_(\S(?:[^_\n]*?\S)?)_(?=$|[^A-Za-z0-9])/g, "$1$2")
+    .replace(/(^|[^\p{L}\p{N}])_(\S(?:[^_\n]*?\S)?)_(?=$|[^\p{L}\p{N}])/gu, "$1$2")
     .trim();
   const withEscapesRestored = restoreMarkdownEscapes(stripped, protectedEscapes.literals);
   return restoreInlineCode(withEscapesRestored, protectedCode.literals);
@@ -209,13 +209,54 @@ function stripInlineMarkdown(text: string): string {
 
 function protectInlineCode(text: string): { text: string; literals: string[] } {
   const literals: string[] = [];
-  return {
-    text: text.replace(/`([^`\n]+)`/g, (_match, literal: string) => {
-      const literalIndex = literals.push(literal) - 1;
-      return `\uE002${literalIndex}\uE003`;
-    }),
-    literals,
-  };
+  let protectedText = "";
+  let cursor = 0;
+
+  while (cursor < text.length) {
+    const openingIndex = findUnescapedBacktick(text, cursor);
+    if (openingIndex < 0) {
+      protectedText += text.slice(cursor);
+      break;
+    }
+
+    const closingIndex = findUnescapedBacktick(text, openingIndex + 1);
+    if (
+      closingIndex < 0 ||
+      closingIndex === openingIndex + 1 ||
+      text.slice(openingIndex + 1, closingIndex).includes("\n")
+    ) {
+      protectedText += text.slice(cursor, openingIndex + 1);
+      cursor = openingIndex + 1;
+      continue;
+    }
+
+    protectedText += text.slice(cursor, openingIndex);
+    const literalIndex = literals.push(text.slice(openingIndex + 1, closingIndex)) - 1;
+    protectedText += `\uE002${literalIndex}\uE003`;
+    cursor = closingIndex + 1;
+  }
+
+  return { text: protectedText, literals };
+}
+
+function findUnescapedBacktick(text: string, startIndex: number): number {
+  for (let index = startIndex; index < text.length; index += 1) {
+    if (text[index] === "\n") {
+      return -1;
+    }
+    if (text[index] === "`" && !isEscapedCharacter(text, index)) {
+      return index;
+    }
+  }
+  return -1;
+}
+
+function isEscapedCharacter(text: string, index: number): boolean {
+  let backslashCount = 0;
+  for (let cursor = index - 1; cursor >= 0 && text[cursor] === "\\"; cursor -= 1) {
+    backslashCount += 1;
+  }
+  return backslashCount % 2 === 1;
 }
 
 function restoreInlineCode(text: string, literals: string[]): string {
