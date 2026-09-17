@@ -26,12 +26,6 @@ jobs:
         with:
           bun-version: 1.3.14
 
-      - name: Show canonical formatter diff
-        run: |
-          bunx oxfmt@0.54.0 --write src/domain/documentImport.ts
-          git --no-pager diff -- src/domain/documentImport.ts
-          exit 1
-
       - name: Prepare pinned nlp-stack source
         run: |
           git clone --filter=blob:none https://github.com/moritzbrantner/nlp-stack.git ../nlp-stack
