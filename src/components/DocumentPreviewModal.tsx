@@ -146,7 +146,9 @@ function findMostOverlappingParagraph(
   let bestScore = 0;
 
   for (const paragraph of paragraphs) {
-    const paragraphTerms = new Set(normalizeSearchableText(paragraph.text).match(/[a-z0-9]+/g) ?? []);
+    const paragraphTerms = new Set(
+      normalizeSearchableText(paragraph.text).match(/[a-z0-9]+/g) ?? [],
+    );
     const score = Array.from(snippetTerms).filter((term) => paragraphTerms.has(term)).length;
     if (score > bestScore) {
       bestParagraph = paragraph;
@@ -159,9 +161,7 @@ function findMostOverlappingParagraph(
 
 function createHighlightTerms(query: string, result: SearchResultView): string[] {
   const parsed = parsePhraseQuery(query);
-  const queryTerms = (parsed.searchText || query)
-    .replace(/"/g, " ")
-    .match(/[a-z0-9]+/gi) ?? [];
+  const queryTerms = (parsed.searchText || query).replace(/"/g, " ").match(/[a-z0-9]+/gi) ?? [];
   const candidates = [...result.exactPhraseMatches, ...parsed.quotedPhrases, ...queryTerms];
   const unique = new Map<string, string>();
 
@@ -182,13 +182,11 @@ function highlightText(text: string, terms: string[]): ReactNode {
   }
 
   const regex = new RegExp(`(${terms.map(escapeRegExp).join("|")})`, "gi");
-  return text.split(regex).map((segment, index) =>
-    index % 2 === 1 ? (
-      <mark key={`${segment}-${index}`}>{segment}</mark>
-    ) : (
-      segment
-    ),
-  );
+  return text
+    .split(regex)
+    .map((segment, index) =>
+      index % 2 === 1 ? <mark key={`${segment}-${index}`}>{segment}</mark> : segment,
+    );
 }
 
 function escapeRegExp(value: string): string {

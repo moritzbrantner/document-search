@@ -9,9 +9,9 @@ checkout.
 Ordinary development now consumes both canonical WASM wrappers directly from
 their owner, [`moritzbrantner/nlp-stack`](https://github.com/moritzbrantner/nlp-stack):
 
-| Package | Source path |
-| --- | --- |
-| `@moritzbrantner/text-core-wasm` | `../nlp-stack/packages/text-core-wasm` |
+| Package                           | Source path                             |
+| --------------------------------- | --------------------------------------- |
+| `@moritzbrantner/text-core-wasm`  | `../nlp-stack/packages/text-core-wasm`  |
 | `@moritzbrantner/text-index-wasm` | `../nlp-stack/packages/text-index-wasm` |
 
 The exact source revision is recorded in `.nlp-stack-rev`. The setup script
