@@ -1,6 +1,20 @@
 import { runTextIndexOperation } from "../wasm/textIndex";
 import { findExactPhraseMatches, parsePhraseQuery } from "./phraseQuery";
-import type { ExtractedDocument, SearchRequestState, SearchResultView } from "./types";
+import type {
+  ExtractedDocument,
+  FuzzyTermMatchView,
+  SearchRequestState,
+  SearchResultView,
+} from "./types";
+
+const FUZZY_SEARCH_OPTIONS = {
+  maxEditDistance: 1,
+  minTermLength: 4,
+  maxExpansionsPerTerm: 3,
+  maxQueryVariants: 16,
+  maxVocabularyTerms: 20_000,
+  fuzzyWeight: 0.8,
+} as const;
 
 interface RawSearchResult {
   chunkId?: string;
@@ -8,6 +22,7 @@ interface RawSearchResult {
   score?: number;
   snippet?: string;
   matchedPhrases?: string[];
+  fuzzyMatches?: FuzzyTermMatchView[];
   chunk?: {
     id?: string;
     documentId?: string;
@@ -34,6 +49,7 @@ export async function searchCorpus(
     request.mode,
     request.topK,
     phrases,
+    request.fuzzy === true && request.mode === "lexical",
   );
 
   return candidates
@@ -47,6 +63,7 @@ async function runSearch(
   mode: SearchRequestState["mode"],
   topK: number,
   requiredPhrases: string[],
+  fuzzy: boolean,
 ): Promise<RawSearchResult[]> {
   const response = await runTextIndexOperation({
     operation: "index.search",
@@ -72,6 +89,7 @@ async function runSearch(
         topK,
         requiredPhrases,
         explain: true,
+        ...(fuzzy ? { fuzzy: FUZZY_SEARCH_OPTIONS } : {}),
       },
       options: {
         chunkingStrategy: "paragraph",
@@ -109,5 +127,6 @@ function toSearchResultView(
     snippet,
     paragraphOrdinal,
     exactPhraseMatches: raw.matchedPhrases ?? findExactPhraseMatches(snippet, phrases),
+    fuzzyMatches: raw.fuzzyMatches ?? [],
   };
 }

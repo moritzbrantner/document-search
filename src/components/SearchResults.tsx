@@ -45,11 +45,19 @@ export function SearchResults({ documents, results, onSelectResult }: SearchResu
                   <span>{result.chunkId}</span>
                 </div>
                 <p>{result.snippet}</p>
-                {result.exactPhraseMatches.length > 0 ? (
+                {result.exactPhraseMatches.length > 0 || result.fuzzyMatches.length > 0 ? (
                   <div className="term-list">
                     {result.exactPhraseMatches.map((phrase) => (
-                      <span className="term-chip is-match" key={phrase}>
+                      <span className="term-chip is-match" key={`phrase:${phrase}`}>
                         {phrase}
+                      </span>
+                    ))}
+                    {result.fuzzyMatches.map((match) => (
+                      <span
+                        className="term-chip is-match"
+                        key={`fuzzy:${match.queryTerm}:${match.matchedTerm}`}
+                      >
+                        {match.queryTerm} → {match.matchedTerm}
                       </span>
                     ))}
                   </div>
