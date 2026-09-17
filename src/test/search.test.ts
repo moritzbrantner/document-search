@@ -1,5 +1,5 @@
 import { expect, test } from "bun:test";
-import { searchCorpus } from "../domain/search";
+import { resolveSearchDocumentIds, searchCorpus } from "../domain/search";
 import {
   createCorpusSnapshot,
   parseCorpusSnapshot,
@@ -99,6 +99,68 @@ test("typo-tolerant lexical search recovers a transposed term and reports the co
   });
 });
 
+test("document filters resolve title source date and explicit selection before ranking", () => {
+  const documents = [
+    fakeDocument(
+      "climate-2025",
+      "Climate Memo",
+      "Policy funding",
+      "https://example.test/policy/climate",
+      "2025-12-20T10:00:00.000Z",
+    ),
+    fakeDocument(
+      "climate-2026",
+      "Climate Brief",
+      "Policy funding",
+      "https://example.test/policy/climate-2026",
+      "2026-06-13T10:00:00.000Z",
+    ),
+    fakeDocument(
+      "recipe-2026",
+      "Recipe",
+      "Kitchen notes",
+      "https://example.test/food",
+      "2026-06-13T10:00:00.000Z",
+    ),
+  ];
+
+  expect(
+    resolveSearchDocumentIds(documents, {
+      titleContains: "ＣＬＩＭＡＴＥ",
+      sourceContains: "/policy/",
+      importedFrom: "2026-01-01",
+      importedTo: "2026-12-31",
+      documentIds: ["climate-2026", "recipe-2026"],
+    }),
+  ).toEqual(["climate-2026"]);
+});
+
+test("an active filter with no matching documents stays empty instead of becoming unfiltered", () => {
+  const documents = [fakeDocument("doc-1", "Climate", "Policy")];
+  expect(
+    resolveSearchDocumentIds(documents, {
+      titleContains: "missing",
+      sourceContains: "",
+      importedFrom: "",
+      importedTo: "",
+      documentIds: [],
+    }),
+  ).toEqual([]);
+});
+
+test("an inverted import date range matches no documents", () => {
+  const documents = [fakeDocument("doc-1", "Climate", "Policy")];
+  expect(
+    resolveSearchDocumentIds(documents, {
+      titleContains: "",
+      sourceContains: "",
+      importedFrom: "2026-12-31",
+      importedTo: "2026-01-01",
+      documentIds: [],
+    }),
+  ).toEqual([]);
+});
+
 test("export/import round-trips CorpusSnapshot", () => {
   const documents = [fakeDocument("doc-1", "Round Trip", "Exported corpus text.")];
   const snapshot = createCorpusSnapshot(documents);
@@ -109,10 +171,17 @@ test("export/import round-trips CorpusSnapshot", () => {
   expect(parsed.documents).toEqual(documents);
 });
 
-function fakeDocument(id: string, title: string, text: string): ExtractedDocument {
+function fakeDocument(
+  id: string,
+  title: string,
+  text: string,
+  sourceUri?: string,
+  importedAt = "2026-06-13T00:00:00.000Z",
+): ExtractedDocument {
   return {
     id,
     title,
+    sourceUri,
     html: `<p>${text}</p>`,
     text,
     paragraphs: text.split("\n\n").map((paragraph, ordinal) => ({
@@ -122,7 +191,7 @@ function fakeDocument(id: string, title: string, text: string): ExtractedDocumen
       text: paragraph,
       headingPath: [],
     })),
-    importedAt: "2026-06-13T00:00:00.000Z",
+    importedAt,
     stats: {
       words: text.split(/\s+/).length,
       sentences: text.split(".").filter(Boolean).length,
