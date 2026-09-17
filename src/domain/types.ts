@@ -48,6 +48,14 @@ export interface SearchRequestState {
   topK: number;
   mode: "hybrid" | "lexical" | "semantic";
   requireQuotedPhrases: boolean;
+  fuzzy?: boolean;
+}
+
+export interface FuzzyTermMatchView {
+  queryTerm: string;
+  matchedTerm: string;
+  editDistance: number;
+  similarity: number;
 }
 
 export interface SearchResultView {
@@ -58,6 +66,7 @@ export interface SearchResultView {
   snippet: string;
   paragraphOrdinal?: number;
   exactPhraseMatches: string[];
+  fuzzyMatches: FuzzyTermMatchView[];
 }
 
 export interface CorpusStats {
