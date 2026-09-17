@@ -162,7 +162,12 @@ function findMostOverlappingParagraph(
 function createHighlightTerms(query: string, result: SearchResultView): string[] {
   const parsed = parsePhraseQuery(query);
   const queryTerms = (parsed.searchText || query).replace(/"/g, " ").match(/[a-z0-9]+/gi) ?? [];
-  const candidates = [...result.exactPhraseMatches, ...parsed.quotedPhrases, ...queryTerms];
+  const candidates = [
+    ...result.exactPhraseMatches,
+    ...result.fuzzyMatches.map((match) => match.matchedTerm),
+    ...parsed.quotedPhrases,
+    ...queryTerms,
+  ];
   const unique = new Map<string, string>();
 
   for (const candidate of candidates) {
