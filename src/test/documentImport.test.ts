@@ -88,6 +88,32 @@ test("Markdown decodes backslash-escaped delimiters without treating them as for
   );
 });
 
+test("Markdown escaped backticks remain literal instead of opening code spans", () => {
+  const input = parseUploadedDocument({
+    name: "escaped-backticks.md",
+    mimeType: "text/markdown",
+    importedAt: IMPORTED_AT,
+    content: "Escaped \\`literal\\` remains searchable.",
+  });
+  const document = extractHtmlDocument(input);
+
+  expect(document.paragraphs[0]?.text).toBe("Escaped `literal` remains searchable.");
+});
+
+test("Markdown preserves underscores inside Unicode identifiers", () => {
+  const input = parseUploadedDocument({
+    name: "unicode-identifiers.md",
+    mimeType: "text/markdown",
+    importedAt: IMPORTED_AT,
+    content: "Keep café_nom_ and über_wert_ literal, but _emphasis_ formatted.",
+  });
+  const document = extractHtmlDocument(input);
+
+  expect(document.paragraphs[0]?.text).toBe(
+    "Keep café_nom_ and über_wert_ literal, but emphasis formatted.",
+  );
+});
+
 test("Markdown headings preserve attached hashes and remove closing markers", () => {
   const input = parseUploadedDocument({
     name: "heading-notes.md",
