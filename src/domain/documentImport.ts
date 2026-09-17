@@ -198,16 +198,10 @@ function stripInlineMarkdown(text: string): string {
     .replace(/!\[([^\]]*)\]\([^)]*\)/g, "$1")
     .replace(/\[([^\]]+)\]\([^)]*\)/g, "$1")
     .replace(/\*\*(\S(?:[^*\n]*?\S)?)\*\*/g, "$1")
-    .replace(
-      /(^|[^\p{L}\p{N}])__(\S(?:[^_\n]*?\S)?)__(?=$|[^\p{L}\p{N}])/gu,
-      "$1$2",
-    )
+    .replace(/(^|[^\p{L}\p{N}])__(\S(?:[^_\n]*?\S)?)__(?=$|[^\p{L}\p{N}])/gu, "$1$2")
     .replace(/~~(\S(?:[^~\n]*?\S)?)~~/g, "$1")
     .replace(/\*(\S(?:[^*\n]*?\S)?)\*/g, "$1")
-    .replace(
-      /(^|[^\p{L}\p{N}])_(\S(?:[^_\n]*?\S)?)_(?=$|[^\p{L}\p{N}])/gu,
-      "$1$2",
-    )
+    .replace(/(^|[^\p{L}\p{N}])_(\S(?:[^_\n]*?\S)?)_(?=$|[^\p{L}\p{N}])/gu, "$1$2")
     .trim();
   const withEscapesRestored = restoreMarkdownEscapes(stripped, protectedEscapes.literals);
   return restoreInlineCode(withEscapesRestored, protectedCode.literals);
