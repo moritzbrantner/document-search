@@ -9,31 +9,97 @@ on:
 
 permissions:
   contents: read
+  packages: read
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
+  nlp-wasm:
+    name: Build or reuse pinned NLP WASM
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+    uses: moritzbrantner/reusable-workflows/.github/workflows/build-artifact.yml@7533380c9468a1ec5504f5e56888bf4a45009317
+    with:
+      source_sha: ${{ github.event.pull_request.head.sha || github.sha }}
+      artifact_key: document-search-nlp-wasm-v1
+      bun_version: "1.3.14"
+      rust_toolchain: "1.95.0"
+      rust_targets: wasm32-unknown-unknown
+      cache_cargo: true
+      cargo_cache_dependency_path: Cargo.lock
+      cargo_tool_cache_key: rust-1.95.0-wasm-pack-0.14.0
+      use_environment_v1: false
+      setup_command: |
+        set -euo pipefail
+        revision="$(tr -d '[:space:]' < .nlp-stack-rev)"
+        rm -rf ../nlp-stack
+        git init ../nlp-stack
+        git -C ../nlp-stack fetch --depth=1 https://github.com/moritzbrantner/nlp-stack.git "$revision"
+        git -C ../nlp-stack checkout --detach FETCH_HEAD
+        cargo install wasm-pack --locked --version 0.14.0
+      build_command: |
+        set -euo pipefail
+        ./scripts/setup-source-deps
+        rm -rf .artifacts/nlp-wasm
+        mkdir -p .artifacts/nlp-wasm
+        cp -R ../nlp-stack/packages/text-core-wasm/pkg .artifacts/nlp-wasm/text-core-wasm
+        cp -R ../nlp-stack/packages/text-index-wasm/pkg .artifacts/nlp-wasm/text-index-wasm
+      artifact_paths: .artifacts/nlp-wasm
+      reuse_across_runs: true
+      expected_consumers: 2
+      artifact_retention_days: 7
+      timeout_minutes: 30
+
   validate:
+    name: Validate with verified NLP WASM
+    needs: nlp-wasm
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    permissions:
+      actions: read
+      contents: read
+      packages: read
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+      - name: Check out exact source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.nlp-wasm.outputs.source_sha }}
 
       - name: Set up Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
           bun-version: 1.3.14
 
-      - name: Prepare pinned nlp-stack source
+      - name: Check out exact nlp-stack source
         run: |
-          git clone --filter=blob:none https://github.com/moritzbrantner/nlp-stack.git ../nlp-stack
-          git -C ../nlp-stack checkout "$(cat .nlp-stack-rev)"
-          rustup toolchain install 1.95.0 --profile minimal
-          rustup target add wasm32-unknown-unknown --toolchain 1.95.0
-          cargo +1.95.0 install wasm-pack --locked --version 0.14.0
-          ./scripts/setup-source-deps
+          set -euo pipefail
+          revision="$(tr -d '[:space:]' < .nlp-stack-rev)"
+          git init ../nlp-stack
+          git -C ../nlp-stack fetch --depth=1 https://github.com/moritzbrantner/nlp-stack.git "$revision"
+          git -C ../nlp-stack checkout --detach FETCH_HEAD
+          test "$(git -C ../nlp-stack rev-parse HEAD)" = "$revision"
+
+      - name: Consume verified NLP WASM
+        uses: moritzbrantner/reusable-workflows/.github/actions/consume-build-artifact@7533380c9468a1ec5504f5e56888bf4a45009317
+        with:
+          producer_run_id: ${{ needs.nlp-wasm.outputs.producer_run_id }}
+          receipt_artifact_name: ${{ needs.nlp-wasm.outputs.receipt_artifact_name }}
+          artifact_name: ${{ needs.nlp-wasm.outputs.artifact_name }}
+          artifact_digest: ${{ needs.nlp-wasm.outputs.artifact_digest }}
+          source_sha: ${{ needs.nlp-wasm.outputs.source_sha }}
+          artifact_key: ${{ needs.nlp-wasm.outputs.artifact_key }}
+          identity_digest: ${{ needs.nlp-wasm.outputs.identity_digest }}
+          destination_path: .artifacts/verified-nlp-wasm
+          github_token: ${{ github.token }}
+
+      - name: Prepare source dependencies from verified WASM
+        env:
+          DOCUMENT_SEARCH_PREBUILT_NLP_WASM_DIR: ${{ github.workspace }}/.artifacts/verified-nlp-wasm
+        run: ./scripts/setup-source-deps
 
       - name: Check formatting
         run: bun run format:check
