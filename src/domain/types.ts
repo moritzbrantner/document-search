@@ -80,6 +80,8 @@ export type SourceLocatorV1 =
       byteStart: number;
       byteEnd: number;
       paragraphOrdinal?: number;
+      page?: number;
+      section?: string;
       sourceSelector?: string;
       headingPath: string[];
     }
