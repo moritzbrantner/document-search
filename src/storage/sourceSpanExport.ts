@@ -20,20 +20,9 @@ export async function createSourceSpanBatch(
 
   for (const document of documents) {
     const sourceHash = await sha256(document.text);
-    sources.push({
-      id: document.id,
-      kind: "document",
-      revision: sourceHash,
-      ...(document.sourceUri ? { uri: document.sourceUri } : {}),
-      title: document.title,
-      creators: [],
-      contentHash: sourceHash,
-      metadata: {
-        importedAt: document.importedAt,
-      },
-    });
-
+    const documentSpans: SourceSpanRecordV1[] = [];
     let searchFrom = 0;
+
     for (const paragraph of [...document.paragraphs].sort((left, right) => left.ordinal - right.ordinal)) {
       const utf16Start = document.text.indexOf(paragraph.text, searchFrom);
       if (utf16Start < 0) {
@@ -45,7 +34,7 @@ export async function createSourceSpanBatch(
       const byteStart = utf8Length(document.text.slice(0, utf16Start));
       const byteEnd = byteStart + utf8Length(paragraph.text);
 
-      spans.push({
+      documentSpans.push({
         id: paragraph.id,
         sourceId: document.id,
         sequence: paragraph.ordinal,
@@ -63,6 +52,32 @@ export async function createSourceSpanBatch(
       });
       searchFrom = utf16End;
     }
+
+    const revision = await sha256(
+      JSON.stringify({
+        contentHash: sourceHash,
+        spans: documentSpans.map((span) => ({
+          id: span.id,
+          sequence: span.sequence,
+          contentHash: span.contentHash,
+          locator: span.locator,
+        })),
+      }),
+    );
+
+    sources.push({
+      id: document.id,
+      kind: "document",
+      revision,
+      ...(document.sourceUri ? { uri: document.sourceUri } : {}),
+      title: document.title,
+      creators: [],
+      contentHash: sourceHash,
+      metadata: {
+        importedAt: document.importedAt,
+      },
+    });
+    spans.push(...documentSpans);
   }
 
   return {
