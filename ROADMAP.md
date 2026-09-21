@@ -11,7 +11,7 @@ Document Search should stay local-first and keep retrieval semantics in `nlp-sta
 
 ## Corpus interoperability
 
-1. [ ] **Expose stable source and span records for downstream consumers.** Export deterministic document identity plus text spans with source revision, locator, language, metadata, verbatim text, and a content hash.
+1. [x] **Expose stable source and span records for downstream consumers.** Export deterministic document identity plus text spans with source revision, locator, language, metadata, verbatim text, and a content hash.
 2. [ ] **Preserve parser provenance.** A downstream philosophical statement must be traceable back through the exported span to the exact imported document and parser/extraction revision that produced it.
 3. [ ] **Add a deterministic batch/export boundary.** Prefer a versioned JSON/JSONL-style contract that can be consumed by tools such as `philosophy-extractor` without coupling them to IndexedDB or the React application.
 4. [ ] **Keep philosophical interpretation downstream.** `document-search` may expose source material and search results, but philosophical relevance, claim extraction, argument roles, and worldview semantics belong in `philosophy-extractor` and `worldview-lab`.
