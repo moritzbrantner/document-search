@@ -37,7 +37,6 @@ export interface CorpusSnapshot {
   exportedAt: string;
 }
 
-
 export interface SourceSpanBatchV1 {
   schema: "source_span_interchange";
   schemaVersion: 1;
