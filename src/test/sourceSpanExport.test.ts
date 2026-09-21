@@ -14,8 +14,9 @@ test("source-span export preserves exact document and paragraph provenance", asy
     revision: "git:abc123",
   });
   expect(batch.sources).toHaveLength(1);
-  expect(batch.sources[0]?.revision).toBe(batch.sources[0]?.contentHash);
+  expect(batch.sources[0]?.revision).toMatch(/^sha256:[0-9a-f]{64}$/);
   expect(batch.sources[0]?.contentHash).toMatch(/^sha256:[0-9a-f]{64}$/);
+  expect(batch.sources[0]?.revision).not.toBe(batch.sources[0]?.contentHash);
 
   expect(batch.spans.map((span) => span.id)).toEqual(["doc-1:p0", "doc-1:p1"]);
   expect(batch.spans[0]?.locator).toEqual({
@@ -42,6 +43,18 @@ test("source-span export fails closed when stored paragraph text cannot be locat
   await expect(createSourceSpanBatch([document], "git:abc123")).rejects.toThrow(
     "refusing to emit ambiguous provenance",
   );
+});
+
+test("source revision changes when structure changes without changing document text", async () => {
+  const first = fakeDocument("doc-1", "First.\n\nSecond.");
+  const second = fakeDocument("doc-1", "First.\n\nSecond.");
+  second.paragraphs[1]!.headingPath = ["Changed heading"];
+
+  const firstBatch = await createSourceSpanBatch([first], "git:abc123");
+  const secondBatch = await createSourceSpanBatch([second], "git:abc123");
+
+  expect(firstBatch.sources[0]?.contentHash).toBe(secondBatch.sources[0]?.contentHash);
+  expect(firstBatch.sources[0]?.revision).not.toBe(secondBatch.sources[0]?.revision);
 });
 
 test("source-span export requires an exact producer revision", async () => {
