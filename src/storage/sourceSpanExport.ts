@@ -23,7 +23,9 @@ export async function createSourceSpanBatch(
     const documentSpans: SourceSpanRecordV1[] = [];
     let searchFrom = 0;
 
-    for (const paragraph of [...document.paragraphs].sort((left, right) => left.ordinal - right.ordinal)) {
+    for (const paragraph of [...document.paragraphs].sort(
+      (left, right) => left.ordinal - right.ordinal,
+    )) {
       const utf16Start = document.text.indexOf(paragraph.text, searchFrom);
       if (utf16Start < 0) {
         throw new Error(
@@ -105,5 +107,7 @@ function utf8Length(value: string): number {
 
 async function sha256(value: string): Promise<string> {
   const digest = await globalThis.crypto.subtle.digest("SHA-256", textEncoder.encode(value));
-  return `sha256:${Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("")}`;
+  return `sha256:${Array.from(new Uint8Array(digest), (byte) =>
+    byte.toString(16).padStart(2, "0"),
+  ).join("")}`;
 }
