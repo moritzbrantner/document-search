@@ -22,7 +22,7 @@ jobs:
       actions: read
       contents: read
       packages: read
-    uses: moritzbrantner/reusable-workflows/.github/workflows/build-artifact.yml@7533380c9468a1ec5504f5e56888bf4a45009317
+    uses: moritzbrantner/reusable-workflows/.github/workflows/build-artifact.yml@b14fb03c3d775c682b92a49954e4d6f43aa9e281
     with:
       source_sha: ${{ github.event.pull_request.head.sha || github.sha }}
       artifact_key: document-search-nlp-wasm-v1
@@ -50,7 +50,6 @@ jobs:
         cp -R ../nlp-stack/packages/text-index-wasm/pkg .artifacts/nlp-wasm/text-index-wasm
       artifact_paths: .artifacts/nlp-wasm
       reuse_across_runs: true
-      expected_consumers: 2
       artifact_retention_days: 7
       timeout_minutes: 30
 
@@ -84,7 +83,7 @@ jobs:
           test "$(git -C ../nlp-stack rev-parse HEAD)" = "$revision"
 
       - name: Consume verified NLP WASM
-        uses: moritzbrantner/reusable-workflows/.github/actions/consume-build-artifact@7533380c9468a1ec5504f5e56888bf4a45009317
+        uses: moritzbrantner/reusable-workflows/.github/actions/consume-build-artifact@b14fb03c3d775c682b92a49954e4d6f43aa9e281
         with:
           producer_run_id: ${{ needs.nlp-wasm.outputs.producer_run_id }}
           receipt_artifact_name: ${{ needs.nlp-wasm.outputs.receipt_artifact_name }}
