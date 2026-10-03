@@ -4,6 +4,7 @@ set -euo pipefail
 root="$(cd "$(dirname "$0")/.." && pwd)"
 nlp_stack="${NLP_STACK_DIR:-"$root/../nlp-stack"}"
 expected="$(tr -d '[:space:]' < "$root/.nlp-stack-rev")"
+prepared="${DOCUMENT_SEARCH_PREBUILT_NLP_WASM_DIR:-}"
 
 if [[ ! -d "$nlp_stack/.git" ]]; then
   printf 'Missing nlp-stack checkout at %s\n' "$nlp_stack" >&2
@@ -16,6 +17,21 @@ if [[ "$actual" != "$expected" ]]; then
   exit 2
 fi
 
-bun run --cwd "$nlp_stack/packages/text-core-wasm" build
-bun run --cwd "$nlp_stack/packages/text-index-wasm" build
+if [[ -n "$prepared" ]]; then
+  for package in text-core-wasm text-index-wasm; do
+    source_dir="$prepared/$package"
+    target_dir="$nlp_stack/packages/$package/pkg"
+    if [[ ! -d "$source_dir" ]] || [[ -z "$(find "$source_dir" -mindepth 1 -print -quit)" ]]; then
+      printf 'Missing prepared %s artifact at %s\n' "$package" "$source_dir" >&2
+      exit 2
+    fi
+    rm -rf "$target_dir"
+    mkdir -p "$(dirname "$target_dir")"
+    cp -R "$source_dir" "$target_dir"
+  done
+else
+  bun run --cwd "$nlp_stack/packages/text-core-wasm" build
+  bun run --cwd "$nlp_stack/packages/text-index-wasm" build
+fi
+
 bun install --cwd "$root"
