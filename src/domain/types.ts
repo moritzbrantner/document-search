@@ -37,6 +37,60 @@ export interface CorpusSnapshot {
   exportedAt: string;
 }
 
+export interface SourceSpanBatchV1 {
+  schema: "source_span_interchange";
+  schemaVersion: 1;
+  producer: SourceProducerV1;
+  sources: SourceRecordV1[];
+  spans: SourceSpanRecordV1[];
+}
+
+export interface SourceProducerV1 {
+  name: string;
+  revision: string;
+}
+
+export interface SourceRecordV1 {
+  id: string;
+  kind: string;
+  revision: string;
+  uri?: string;
+  title?: string;
+  creators: string[];
+  language?: string;
+  contentHash: string;
+  metadata: Record<string, unknown>;
+}
+
+export interface SourceSpanRecordV1 {
+  id: string;
+  sourceId: string;
+  sequence: number;
+  text: string;
+  contentHash: string;
+  language?: string;
+  locator: SourceLocatorV1;
+  metadata: Record<string, unknown>;
+}
+
+export type SourceLocatorV1 =
+  | {
+      kind: "text";
+      byteStart: number;
+      byteEnd: number;
+      paragraphOrdinal?: number;
+      page?: number;
+      section?: string;
+      sourceSelector?: string;
+      headingPath: string[];
+    }
+  | {
+      kind: "timed";
+      segmentIndex: number;
+      startSeconds?: number;
+      endSeconds?: number;
+    };
+
 export type DuplicateRule = "same-page" | "same-content" | "same-page-or-content";
 
 export interface ImportPreferences {

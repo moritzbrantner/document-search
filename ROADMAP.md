@@ -9,6 +9,14 @@ Document Search should stay local-first and keep retrieval semantics in `nlp-sta
 3. [ ] **Add richer document formats deliberately.** Add PDF and office-document extraction behind explicit parser adapters, preferably off the main thread, with size limits and regression fixtures before enabling them in the public demo.
 4. [ ] **Make ingestion observability explicit.** Surface parse duration, extracted paragraph counts, rejected files, and index synchronization state without moving ranking policy into the application.
 
+## Corpus interoperability
+
+1. [x] **Expose stable source and span records for downstream consumers.** Export deterministic document identity plus text spans with source revision, locator, language, metadata, verbatim text, and a content hash.
+2. [ ] **Preserve parser provenance.** A downstream philosophical statement must be traceable back through the exported span to the exact imported document and parser/extraction revision that produced it.
+3. [ ] **Add a deterministic batch/export boundary.** Prefer a versioned JSON/JSONL-style contract that can be consumed by tools such as `philosophy-extractor` without coupling them to IndexedDB or the React application.
+4. [ ] **Keep philosophical interpretation downstream.** `document-search` may expose source material and search results, but philosophical relevance, claim extraction, argument roles, and worldview semantics belong in `philosophy-extractor` and `worldview-lab`.
+5. [ ] **Keep local-first behavior authoritative.** Exporting to a downstream processor must remain explicit; ordinary document search must not silently upload a local corpus to a hosted model service.
+
 ## Search quality
 
 1. [x] **Make exact-phrase constraints authoritative in `text-index`.** Parse quoted phrases in Document Search, pass them through as `requiredPhrases`, and remove bounded app-side candidate widening/filtering.
@@ -22,6 +30,7 @@ Document Search should stay local-first and keep retrieval semantics in `nlp-sta
 
 - Local-first and no-network search remains the default.
 - `nlp-stack` owns retrieval, ranking, filtering, and fuzzy-match semantics.
-- Document Search owns corpus interaction, query parsing, controls, and result presentation.
+- Document Search owns corpus interaction, query parsing, controls, result presentation, and source-span export.
 - Search behavior must be deterministic for the same corpus, query, and options.
 - New search modes need focused regression coverage before they become defaults.
+- Downstream philosophical processing must not become a hidden search-ranking dependency.
