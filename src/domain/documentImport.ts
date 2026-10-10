@@ -16,6 +16,32 @@ export interface UploadedDocumentSource {
   mimeType?: string;
   content: string;
   importedAt: string;
+  /**
+   * The uploaded content when it exactly represents the uploaded bytes. Defaults to
+   * `content`; `null` means the bytes could not be decoded losslessly, so no original
+   * is recorded (see `decodeUploadedBytes`).
+   */
+  originalContent?: string | null;
+}
+
+export interface DecodedUpload {
+  /** Text used for import, decoded like `File.text()` (UTF-8, leading BOM removed). */
+  content: string;
+  /** Lossless UTF-8 text of the exact bytes (BOM kept), or `null` if decoding was lossy. */
+  originalContent: string | null;
+}
+
+/** Decodes uploaded bytes and reports whether the decoded text reproduces them exactly. */
+export function decodeUploadedBytes(bytes: Uint8Array): DecodedUpload {
+  const decoded = new TextDecoder("utf-8", { ignoreBOM: true }).decode(bytes);
+  const reencoded = new TextEncoder().encode(decoded);
+  const exact =
+    reencoded.byteLength === bytes.byteLength &&
+    reencoded.every((byte, index) => byte === bytes[index]);
+  return {
+    content: decoded.startsWith("\uFEFF") ? decoded.slice(1) : decoded,
+    originalContent: exact ? decoded : null,
+  };
 }
 
 const MARKDOWN_ESCAPABLE_CHARACTERS = new Set([
@@ -51,7 +77,14 @@ export function parseUploadedDocument(source: UploadedDocumentSource): HtmlDocum
     sourceUri: source.name,
     html: normalizeDocumentToHtml(source.content, format),
     importedAt: source.importedAt,
-    original: { content: source.content, mediaType: ORIGINAL_MEDIA_TYPES[format] },
+    ...(source.originalContent === null
+      ? {}
+      : {
+          original: {
+            content: source.originalContent ?? source.content,
+            mediaType: ORIGINAL_MEDIA_TYPES[format],
+          },
+        }),
   };
 }
 

@@ -11,6 +11,8 @@ export const CORPUS_CORE_BATCH_SCHEMA_VERSION = 1;
 
 const PRODUCER_NAME = "document-search";
 const EXTRACTION_PRODUCER = "document-search/html-extraction";
+/** Separator `extractHtmlDocument` places between paragraphs in `document.text`. */
+const PARAGRAPH_SEPARATOR = "\n\n";
 const TEXT_PAYLOAD_MEDIA_TYPE = "text/plain; charset=utf-8";
 
 export type CorpusRecordType = "source" | "asset" | "segment" | "representation";
@@ -186,18 +188,17 @@ export async function createCorpusCoreBatch(
     });
     addPayload({ hash: textHash, media_type: TEXT_PAYLOAD_MEDIA_TYPE, text: document.text });
 
-    let searchFrom = 0;
-    for (const paragraph of [...document.paragraphs].sort(
-      (left, right) => left.ordinal - right.ordinal,
-    )) {
-      const utf16Start = document.text.indexOf(paragraph.text, searchFrom);
-      if (utf16Start < 0) {
-        throw new Error(
-          `Cannot locate paragraph ${paragraph.id} inside document ${document.id}; refusing to emit ambiguous provenance.`,
-        );
-      }
-      const utf16End = utf16Start + paragraph.text.length;
-      const start = scalarLength(document.text.slice(0, utf16Start));
+    // Ranges are only trustworthy when the ordered paragraphs, joined by the extraction
+    // separator, reproduce the representation text exactly (a drifted snapshot could
+    // otherwise still match a substring and point at part of a paragraph).
+    const paragraphs = [...document.paragraphs].sort((left, right) => left.ordinal - right.ordinal);
+    if (paragraphs.map((paragraph) => paragraph.text).join(PARAGRAPH_SEPARATOR) !== document.text) {
+      throw new Error(
+        `Paragraphs of document ${document.id} do not reconstruct its extracted text; refusing to emit ambiguous provenance.`,
+      );
+    }
+    let start = 0;
+    for (const paragraph of paragraphs) {
       const end = start + scalarLength(paragraph.text);
       const metadata: CorpusMetadata = {
         heading_path: JSON.stringify(paragraph.headingPath),
@@ -222,7 +223,7 @@ export async function createCorpusCoreBatch(
           metadata: sortedMetadata(metadata),
         },
       });
-      searchFrom = utf16End;
+      start = end + scalarLength(PARAGRAPH_SEPARATOR);
     }
   }
 

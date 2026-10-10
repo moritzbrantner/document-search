@@ -2,6 +2,7 @@ import { useId, useState } from "react";
 
 import {
   isSupportedDocument,
+  decodeUploadedBytes,
   parseUploadedDocument,
   SUPPORTED_DOCUMENT_ACCEPT,
 } from "../domain/documentImport";
@@ -139,14 +140,16 @@ export function DocumentImportPanel({
       }
 
       const inputs = await Promise.all(
-        supportedFiles.map(async (file) =>
-          parseUploadedDocument({
+        supportedFiles.map(async (file) => {
+          const decoded = decodeUploadedBytes(new Uint8Array(await file.arrayBuffer()));
+          return parseUploadedDocument({
             name: file.name,
             mimeType: file.type,
-            content: await file.text(),
+            content: decoded.content,
+            originalContent: decoded.originalContent,
             importedAt: new Date().toISOString(),
-          }),
-        ),
+          });
+        }),
       );
 
       setOperationStatus("Adding parsed documents to the local corpus...");
