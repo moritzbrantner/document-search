@@ -5,6 +5,12 @@ export const SUPPORTED_DOCUMENT_ACCEPT =
 
 export type UploadedDocumentFormat = "html" | "markdown" | "text";
 
+const ORIGINAL_MEDIA_TYPES = {
+  html: "text/html",
+  markdown: "text/markdown",
+  text: "text/plain",
+} as const satisfies Record<UploadedDocumentFormat, string>;
+
 export interface UploadedDocumentSource {
   name: string;
   mimeType?: string;
@@ -45,6 +51,7 @@ export function parseUploadedDocument(source: UploadedDocumentSource): HtmlDocum
     sourceUri: source.name,
     html: normalizeDocumentToHtml(source.content, format),
     importedAt: source.importedAt,
+    original: { content: source.content, mediaType: ORIGINAL_MEDIA_TYPES[format] },
   };
 }
 
