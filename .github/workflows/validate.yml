@@ -59,3 +59,9 @@ jobs:
 
       - name: Build
         run: bun run build
+
+      - name: Install Playwright Chromium
+        run: bunx playwright install --with-deps chromium
+
+      - name: Browser acceptance
+        run: bun run test:e2e

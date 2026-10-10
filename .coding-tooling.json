@@ -3,9 +3,10 @@
   "profile": "repository-foundation-v1",
   "tiers": {
     "fast": ["format:check", "lint", "typecheck", "test"],
-    "full": ["format:check", "lint", "typecheck", "test", "build"]
+    "full": ["format:check", "lint", "typecheck", "test", "build", "test:e2e"]
   },
   "requiredCapabilities": ["format:check", "lint", "typecheck", "test", "build"],
+  "optionalCapabilities": ["test:e2e"],
   "taskKnowledge": {
     "schemaVersion": 1,
     "alwaysInstructions": ["CONTEXT.md"],
