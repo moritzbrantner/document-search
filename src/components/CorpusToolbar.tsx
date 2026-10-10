@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import type { CorpusSnapshot } from "../domain/types";
 
 interface CorpusToolbarProps {

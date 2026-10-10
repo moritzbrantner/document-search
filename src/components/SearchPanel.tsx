@@ -1,4 +1,5 @@
 import { useState } from "react";
+
 import type { ExtractedDocument, SearchFilterState, SearchRequestState } from "../domain/types";
 
 const EMPTY_FILTERS: SearchFilterState = {

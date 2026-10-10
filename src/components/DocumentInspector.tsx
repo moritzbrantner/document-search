@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+
 import { segmentTextDocument } from "../domain/textSegmentation";
 import type { ExtractedDocument } from "../domain/types";
 

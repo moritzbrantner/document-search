@@ -1,11 +1,11 @@
 # Document Search
 
-Document Search manages a local browser-owned corpus of imported HTML documents so the user can search and inspect extracted text.
+Document Search manages a local browser-owned corpus of imported HTML, Markdown and plain-text documents so the user can search and inspect extracted text.
 
 ## Language
 
 **Corpus**:
-The user's local working set of extracted HTML documents available for search.
+The user's local working set of imported HTML, Markdown and plain-text documents, with their extracted text, available for search.
 _Avoid_: Library, Collection, Index, Database
 
 **Duplicate rule**:

@@ -1,0 +1,5 @@
+{
+  "schemaVersion": 1,
+  "registry": "coding-agent-conventions",
+  "modules": ["react", "vite", "tanstack-query", "tooling"]
+}

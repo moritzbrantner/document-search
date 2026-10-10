@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import {
   createDemoDocuments,
   DEMO_DOCUMENT_INPUTS,

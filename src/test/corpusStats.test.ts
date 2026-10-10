@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import { computeCorpusStats } from "../domain/corpusStats";
 import type { ExtractedDocument } from "../domain/types";
 
