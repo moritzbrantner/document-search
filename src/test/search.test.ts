@@ -1,11 +1,12 @@
 import { expect, test } from "bun:test";
+
 import { resolveSearchDocumentIds, searchCorpus } from "../domain/search";
+import type { ExtractedDocument } from "../domain/types";
 import {
   createCorpusSnapshot,
   parseCorpusSnapshot,
   serializeCorpusSnapshot,
 } from "../storage/exportImport";
-import type { ExtractedDocument } from "../domain/types";
 
 test("searchCorpus returns paragraph-level results from text-index-wasm", async () => {
   const results = await searchCorpus(

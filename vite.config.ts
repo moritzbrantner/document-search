@@ -1,8 +1,9 @@
-import { fileURLToPath, URL } from "node:url";
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { defineConfig, type Plugin } from "vite";
-import react from "@vitejs/plugin-react";
+import { fileURLToPath, URL } from "node:url";
+
 import tailwindcss from "@tailwindcss/vite";
+import react from "@vitejs/plugin-react";
+import { defineConfig, type Plugin } from "vite";
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), htmlImportProxyPlugin()],

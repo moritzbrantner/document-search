@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import { extractHtmlDocument } from "../domain/htmlExtraction";
 
 test("HTML extraction removes non-content nodes", () => {

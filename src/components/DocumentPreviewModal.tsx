@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, type ReactNode } from "react";
+
 import { parsePhraseQuery } from "../domain/phraseQuery";
 import { normalizeSearchableText } from "../domain/textSegmentation";
 import type { ExtractedDocument, ExtractedParagraph, SearchResultView } from "../domain/types";

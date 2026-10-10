@@ -1,10 +1,11 @@
-import { useCallback, useMemo, useState } from "react";
 import { useMutation, useQuery, useQueryClient, type UseQueryResult } from "@tanstack/react-query";
+import { useCallback, useMemo, useState } from "react";
+
 import { CorpusOverview } from "./components/CorpusOverview";
 import { CorpusToolbar } from "./components/CorpusToolbar";
-import { DocumentPreviewModal } from "./components/DocumentPreviewModal";
 import { DocumentImportPanel } from "./components/DocumentImportPanel";
 import { DocumentInspector } from "./components/DocumentInspector";
+import { DocumentPreviewModal } from "./components/DocumentPreviewModal";
 import { SearchPanel } from "./components/SearchPanel";
 import { SearchResults } from "./components/SearchResults";
 import { computeCorpusStats } from "./domain/corpusStats";

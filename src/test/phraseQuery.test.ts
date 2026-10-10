@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+
 import { findExactPhraseMatches, parsePhraseQuery } from "../domain/phraseQuery";
 
 test("quoted phrase parser handles one phrase", () => {
