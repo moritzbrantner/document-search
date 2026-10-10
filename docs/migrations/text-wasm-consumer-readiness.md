@@ -30,3 +30,12 @@ work is reproducible without requiring npm publication.
 Publication remains a separate distribution concern. A future npm release may
 replace the sibling paths after an isolated pack/install smoke, but it is no
 longer a prerequisite for source development.
+
+## Update (document-search#18)
+
+The sibling-source path above is retired. Both wrappers are now consumed from
+the commit-pinned git package `@moritzbrantner/nlp-stack-wasm`
+([moritzbrantner/nlp-stack-wasm](https://github.com/moritzbrantner/nlp-stack-wasm)),
+as subpaths `/text-core-wasm` and `/text-index-wasm`. That package pins the
+nlp-stack revision and builds it on install, so `.nlp-stack-rev` and the
+setup script are gone and a clean clone runs with `bun install` and `bun dev`.

@@ -15,5 +15,5 @@
 
 - Use the semantic tiers in `.coding-tooling.json`: `coding-tooling plan --tier fast --json`, then `coding-tooling run --tier fast --strict --json` for relevant work; the full tier additionally builds.
 - Repository-owned scripts remain the authority (`bun run format:check`, `bun run lint`, `bun run typecheck`, `bun run test`, `bun run build`).
-- This app has sibling `nlp-stack` file dependencies and the pinned revision in `.nlp-stack-rev`. An unavailable sibling checkout is an environment/setup gap, not successful validation. Preserve `bun.lock`.
+- The text WASM packages come from the commit-pinned git dependency `@moritzbrantner/nlp-stack-wasm` (subpaths `/text-core-wasm` and `/text-index-wasm`, listed in `trustedDependencies`); a clean clone runs with `bun install` then `bun dev`. Its `prepare` build needs git, rustup and wasm-pack; a missing toolchain is an environment gap, not successful validation. Change retrieval semantics in `nlp-stack`, ship them through `nlp-stack-wasm`, then move the pin here. Preserve `bun.lock`.
 - Retain the hosted Validate/Pages checks; do not weaken actual integration or browser acceptance requirements.
