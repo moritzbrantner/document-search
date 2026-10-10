@@ -1,0 +1,33 @@
+schema_version = 1
+id = "moritzbrantner/document-search"
+kind = "app"
+status = "active"
+summary = "Browser-local document corpus and search app: import, persistence, search controls, result inspection and source-span export over nlp-stack text extraction and retrieval."
+depends_on = ["moritzbrantner/nlp-stack-wasm"]
+consumed_by = []
+supersedes = []
+replaced_by = []
+
+# Corpus and UI live here; text extraction, indexing and retrieval semantics belong to nlp-stack
+# (consumed through the commit-pinned nlp-stack-wasm distribution package).
+[architecture]
+owns = [
+  "document-search/corpus-ingestion",
+  "document-search/corpus-persistence",
+  "document-search/query-parsing",
+  "document-search/search-ui",
+  "document-search/source-span-export",
+]
+consumes = ["nlp-stack/text-core", "nlp-stack/text-index", "nlp-stack/retrieval-semantics"]
+must_not_own = ["nlp-stack/text-core", "nlp-stack/text-index", "nlp-stack/retrieval-semantics"]
+
+[bootstrap]
+command = ["bun", "install", "--frozen-lockfile"]
+check = ["bun", "run", "build"]
+timeout_seconds = 1800
+
+[pages]
+status = "enabled"
+command = ["bunx", "vite", "build", "--base=/document-search/"]
+check = ["bun", "run", "test:e2e"]
+timeout_seconds = 600

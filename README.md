@@ -28,6 +28,11 @@ To move to a newer nlp-stack revision, update the `#<commit>` of
 `@moritzbrantner/nlp-stack-wasm` in `package.json` to a newer commit of that
 repository and run `bun install`.
 
+`.repository.toml` is the machine-readable repository contract: this repository
+owns the corpus and UI, `nlp-stack` owns text extraction, indexing and retrieval
+semantics. `coding-tooling repository contract --root . --execute --json`
+verifies the declared bootstrap and Pages commands in a clean clone.
+
 ## Commands
 
 ```bash
