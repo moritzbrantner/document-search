@@ -56,6 +56,7 @@ export function extractHtmlDocument(input: HtmlDocumentInput): ExtractedDocument
     text,
     paragraphs,
     importedAt: input.importedAt,
+    ...(input.original ? { original: input.original } : {}),
     stats: computeTextStats(text),
   };
 }

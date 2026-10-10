@@ -1,9 +1,16 @@
+/** The imported content exactly as uploaded, before normalization to HTML. */
+export interface OriginalDocumentContent {
+  content: string;
+  mediaType: "text/html" | "text/markdown" | "text/plain";
+}
+
 export interface HtmlDocumentInput {
   id?: string;
   title?: string;
   sourceUri?: string;
   html: string;
   importedAt: string;
+  original?: OriginalDocumentContent;
 }
 
 export interface ExtractedParagraph {
@@ -23,6 +30,8 @@ export interface ExtractedDocument {
   text: string;
   paragraphs: ExtractedParagraph[];
   importedAt: string;
+  /** Absent for documents stored before originals were retained. */
+  original?: OriginalDocumentContent;
   stats: {
     words: number;
     sentences: number;
