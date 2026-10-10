@@ -3,7 +3,7 @@
 ## Repository boundaries
 
 - Read `CONTEXT.md` for domain vocabulary and `README.md` / `ROADMAP.md` for implemented versus planned capabilities.
-- Document Search owns corpus ingestion, indexing, search, and the user-facing inspection workflow. Reuse the sibling `nlp-stack` extraction/index packages through their existing boundary; do not duplicate NLP authority locally.
+- Document Search owns corpus ingestion and storage, query parsing, search controls, result presentation, source-span export and the user-facing inspection workflow. `nlp-stack` owns retrieval, ranking, filtering and fuzzy-match semantics (see `ROADMAP.md` acceptance principles); call its extraction/index packages through their existing boundary and do not add a local ranking or filtering policy.
 - Preserve source-document provenance and deterministic duplicate detection. Do not describe deferred PDF functionality as implemented.
 
 ## Conventions and task context
