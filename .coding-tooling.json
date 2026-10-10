@@ -2,32 +2,13 @@
   "schemaVersion": 1,
   "profile": "repository-foundation-v1",
   "tiers": {
-    "fast": [
-      "format:check",
-      "lint",
-      "typecheck",
-      "test"
-    ],
-    "full": [
-      "format:check",
-      "lint",
-      "typecheck",
-      "test",
-      "build"
-    ]
+    "fast": ["format:check", "lint", "typecheck", "test"],
+    "full": ["format:check", "lint", "typecheck", "test", "build"]
   },
-  "requiredCapabilities": [
-    "format:check",
-    "lint",
-    "typecheck",
-    "test",
-    "build"
-  ],
+  "requiredCapabilities": ["format:check", "lint", "typecheck", "test", "build"],
   "taskKnowledge": {
     "schemaVersion": 1,
-    "alwaysInstructions": [
-      "CONTEXT.md"
-    ],
+    "alwaysInstructions": ["CONTEXT.md"],
     "completion": {
       "tier": "full"
     },
