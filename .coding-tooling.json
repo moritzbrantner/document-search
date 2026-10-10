@@ -30,6 +30,7 @@
     ],
     "completion": {
       "tier": "full"
-    }
+    },
+    "scopes": []
   }
 }
