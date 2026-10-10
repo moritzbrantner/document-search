@@ -29,5 +29,6 @@ timeout_seconds = 1800
 [pages]
 status = "enabled"
 command = ["bunx", "vite", "build", "--base=/document-search/"]
-check = ["bun", "run", "test:e2e"]
+# Playwright browsers are not installed by `bun install`; fetch Chromium (cached) first.
+check = ["sh", "-c", "bunx playwright install chromium && bun run test:e2e"]
 timeout_seconds = 600
