@@ -11,7 +11,8 @@
     "format": "oxfmt --write .",
     "format:check": "oxfmt --check .",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "@moritzbrantner/nlp-stack-wasm": "github:moritzbrantner/nlp-stack-wasm#c289d5b13458ebcd429695baa679266357dd0951",
@@ -21,6 +22,7 @@
   },
   "devDependencies": {
     "@eslint/js": "10.0.1",
+    "@playwright/test": "1.63.0",
     "@tailwindcss/vite": "4.3.3",
     "@types/node": "24.19.2",
     "@types/react": "^19.2.14",
