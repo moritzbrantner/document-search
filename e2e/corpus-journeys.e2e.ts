@@ -100,6 +100,9 @@ test("an uploaded Markdown document joins the corpus and becomes searchable", as
   await openFreshApp(page);
 
   await search(page, "varroa");
+  // "No results to show." is already rendered before any query; wait for the search's own
+  // completion status so the late result cannot race the upload below.
+  await expect(searchRegion(page).getByText("No matching chunks.", { exact: true })).toBeVisible();
   await expect(searchRegion(page).getByText("No results to show.")).toBeVisible();
 
   await uploadMarkdown(page);

@@ -1,8 +1,13 @@
+import { createServer } from "node:net";
+
 import { defineConfig, devices } from "@playwright/test";
 
 // Browser acceptance runs against the production bundle built with the GitHub Pages base path
 // and served statically by `vite preview`; there is no dev server and no backend involved.
-const PORT = 4173;
+// The preview port is a free one chosen once by the runner process (or E2E_PORT when set) and
+// handed to workers through the environment, so a busy 4173 (e.g. `bun run preview`) is no issue.
+const PORT = Number(process.env.E2E_PORT ?? (await findFreePort()));
+process.env.E2E_PORT = String(PORT);
 const BASE_PATH = "/document-search/";
 
 export default defineConfig({
@@ -25,3 +30,20 @@ export default defineConfig({
     timeout: 180_000,
   },
 });
+
+function findFreePort(): Promise<number> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once("error", reject);
+    server.listen(0, "127.0.0.1", () => {
+      const address = server.address();
+      server.close(() => {
+        if (address && typeof address === "object") {
+          resolve(address.port);
+        } else {
+          reject(new Error("Could not allocate a free port for vite preview."));
+        }
+      });
+    });
+  });
+}
