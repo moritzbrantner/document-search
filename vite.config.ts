@@ -1,5 +1,5 @@
 import type { IncomingMessage, ServerResponse } from "node:http";
-import { fileURLToPath, URL } from "node:url";
+import { URL } from "node:url";
 
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -8,15 +8,11 @@ import { defineConfig, type Plugin } from "vite";
 export default defineConfig({
   plugins: [react(), tailwindcss(), htmlImportProxyPlugin()],
   optimizeDeps: {
-    exclude: ["@moritzbrantner/text-core-wasm", "@moritzbrantner/text-index-wasm"],
-  },
-  server: {
-    fs: {
-      allow: [
-        fileURLToPath(new URL(".", import.meta.url)),
-        fileURLToPath(new URL("../nlp-stack/packages", import.meta.url)),
-      ],
-    },
+    // The WASM wrappers use top-level await and inline their .wasm; keep them out of prebundling.
+    exclude: [
+      "@moritzbrantner/nlp-stack-wasm/text-core-wasm",
+      "@moritzbrantner/nlp-stack-wasm/text-index-wasm",
+    ],
   },
 });
 

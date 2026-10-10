@@ -3,7 +3,7 @@ import {
   segmentTextDocument as segment,
   type SegmentedTextDocument,
   type TextDocumentAnalysis,
-} from "@moritzbrantner/text-core-wasm";
+} from "@moritzbrantner/nlp-stack-wasm/text-core-wasm";
 
 export function analyzeTextDocument(text: string): TextDocumentAnalysis {
   return analyze(text, { includePunctuation: false, includeTokens: true });

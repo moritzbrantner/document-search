@@ -5,8 +5,7 @@
     "": {
       "name": "document-search",
       "dependencies": {
-        "@moritzbrantner/text-core-wasm": "file:../nlp-stack/packages/text-core-wasm",
-        "@moritzbrantner/text-index-wasm": "file:../nlp-stack/packages/text-index-wasm",
+        "@moritzbrantner/nlp-stack-wasm": "github:moritzbrantner/nlp-stack-wasm#c289d5b13458ebcd429695baa679266357dd0951",
         "@tanstack/react-query": "^5.101.0",
         "react": "^19.2.6",
         "react-dom": "^19.2.6",
@@ -30,6 +29,9 @@
       },
     },
   },
+  "trustedDependencies": [
+    "@moritzbrantner/nlp-stack-wasm",
+  ],
   "packages": {
     "@babel/code-frame": ["@babel/code-frame@7.29.7", "", { "dependencies": { "@babel/helper-validator-identifier": "^7.29.7", "js-tokens": "^4.0.0", "picocolors": "^1.1.1" } }, "sha512-Aup7aUOfpbAUg2ROOJN6Iw5f9DMBlzu0mIkm/malLQFN/YQgO48wCj0Kxa3sEHJvPVFg7siR+qRInwXd2qhQKw=="],
 
@@ -105,9 +107,7 @@
 
     "@jridgewell/trace-mapping": ["@jridgewell/trace-mapping@0.3.31", "", { "dependencies": { "@jridgewell/resolve-uri": "^3.1.0", "@jridgewell/sourcemap-codec": "^1.4.14" } }, "sha512-zzNR+SdQSDJzc8joaeP8QQoCQr8NuYx2dIIytl1QeBEZHJ9uW6hebsrYgbz8hJwUQao3TWCMtmfV8Nu1twOLAw=="],
 
-    "@moritzbrantner/text-core-wasm": ["@moritzbrantner/text-core-wasm@file:../nlp-stack/packages/text-core-wasm", {}],
-
-    "@moritzbrantner/text-index-wasm": ["@moritzbrantner/text-index-wasm@file:../nlp-stack/packages/text-index-wasm", {}],
+    "@moritzbrantner/nlp-stack-wasm": ["@moritzbrantner/nlp-stack-wasm@github:moritzbrantner/nlp-stack-wasm#c289d5b", {}, "moritzbrantner-nlp-stack-wasm-c289d5b", "sha512-+UncOJZhpRf5PcxF+3Mslet3uZyPLAQSl1nkakT2PeMTwGxaGr1HA9O9O0nqHqxP+RqjGyC+5UlRthWbzB33gw=="],
 
     "@napi-rs/wasm-runtime": ["@napi-rs/wasm-runtime@1.1.5", "", { "dependencies": { "@tybys/wasm-util": "^0.10.2" }, "peerDependencies": { "@emnapi/core": "^1.7.1", "@emnapi/runtime": "^1.7.1" } }, "sha512-AWPoBRJ9tsnVhor4sjO7rkni+7p+2IAEFj6cx06UgP10jkQHqay/36uRV/bFkgrh18D9vb4cr8Q0Pthskgzy+Q=="],
 

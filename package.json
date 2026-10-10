@@ -14,8 +14,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@moritzbrantner/text-core-wasm": "file:../nlp-stack/packages/text-core-wasm",
-    "@moritzbrantner/text-index-wasm": "file:../nlp-stack/packages/text-index-wasm",
+    "@moritzbrantner/nlp-stack-wasm": "github:moritzbrantner/nlp-stack-wasm#c289d5b13458ebcd429695baa679266357dd0951",
     "@tanstack/react-query": "^5.101.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
@@ -36,5 +35,8 @@
     "typescript": "~6.0.2",
     "typescript-eslint": "^8.59.2",
     "vite": "^8.0.12"
-  }
+  },
+  "trustedDependencies": [
+    "@moritzbrantner/nlp-stack-wasm"
+  ]
 }

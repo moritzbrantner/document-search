@@ -1,8 +1,10 @@
 # Document Search
 
 Local-first document search app built with Bun, Vite, React, TypeScript,
-IndexedDB, and the text WASM packages from the sibling `nlp-stack` source
-checkout. Development does not wait for npm publication.
+IndexedDB, and the `text-core-wasm` and `text-index-wasm` packages of
+`nlp-stack`, consumed from the commit-pinned git package
+[`moritzbrantner/nlp-stack-wasm`](https://github.com/moritzbrantner/nlp-stack-wasm).
+A clean clone of this repository is all that is needed.
 
 The GitHub Pages build is a usable browser demo. A fresh browser corpus starts
 with five deterministic demo documents, and users can add their own HTML,
@@ -12,17 +14,19 @@ a hosted search service.
 
 ## Setup
 
-Check out `nlp-stack` beside this repository at the exact revision recorded in
-`.nlp-stack-rev`, then build and install the source dependencies:
-
 ```bash
-git clone https://github.com/moritzbrantner/nlp-stack.git ../nlp-stack
-git -C ../nlp-stack checkout "$(cat .nlp-stack-rev)"
-./scripts/setup-source-deps
+bun install
+bun dev
 ```
 
-The setup script refuses a moving or mismatched `nlp-stack` checkout before it
-builds `text-core-wasm`, builds `text-index-wasm`, and runs `bun install`.
+`bun install` builds the WASM packages of `@moritzbrantner/nlp-stack-wasm` from
+the nlp-stack commit that package pins (its `prepare` script, enabled through
+`trustedDependencies`). That needs `git`, `rustup` (the pinned Rust toolchain
+and the `wasm32-unknown-unknown` target are installed on first use) and
+`wasm-pack` (installed into `~/.cache/nlp-stack-wasm` when it is not on `PATH`).
+To move to a newer nlp-stack revision, update the `#<commit>` of
+`@moritzbrantner/nlp-stack-wasm` in `package.json` to a newer commit of that
+repository and run `bun install`.
 
 ## Commands
 
