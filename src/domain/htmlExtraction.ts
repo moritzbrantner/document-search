@@ -207,7 +207,7 @@ function parseWithFallbackTree(html: string): ParsedHtml {
   const blocks: ParsedBlock[] = [];
   const headings: ActiveHeading[] = [];
 
-  walkFallbackBlocks(root, headingPath, blocks);
+  walkFallbackBlocks(root, headings, blocks);
   return { title, firstH1, blocks };
 }
 
@@ -220,7 +220,7 @@ function closeTag(stack: TreeNode[], tagName: string): void {
   }
 }
 
-function walkFallbackBlocks(node: TreeNode, headingPath: string[], blocks: ParsedBlock[]): void {
+function walkFallbackBlocks(node: TreeNode, headings: ActiveHeading[], blocks: ParsedBlock[]): void {
   if (BLOCK_TAGS.has(node.tagName) && !hasDescendantBlock(node)) {
     const text = normalizeWhitespace(collectText(node));
     if (text) {
@@ -237,7 +237,7 @@ function walkFallbackBlocks(node: TreeNode, headingPath: string[], blocks: Parse
   }
 
   for (const child of node.children) {
-    walkFallbackBlocks(child, headingPath, blocks);
+    walkFallbackBlocks(child, headings, blocks);
   }
 }
 
