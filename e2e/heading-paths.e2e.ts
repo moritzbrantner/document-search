@@ -43,9 +43,7 @@ test("browser DOMParser exports dense skipped-level headings", async ({ page }, 
   };
 
   for (const { firstHeading, paths } of examples) {
-    const document = snapshot.documents.find(
-      (entry) => entry.paragraphs[0]?.text === firstHeading,
-    );
+    const document = snapshot.documents.find((entry) => entry.paragraphs[0]?.text === firstHeading);
     expect(document).toBeDefined();
     expect(document?.paragraphs.map((paragraph) => paragraph.headingPath)).toEqual(paths);
     for (const paragraph of document?.paragraphs ?? []) {
