@@ -12,6 +12,7 @@ import { Database } from "bun:sqlite";
 import { createHash } from "node:crypto";
 import {
   existsSync,
+  lstatSync,
   mkdirSync,
   readdirSync,
   readFileSync,
@@ -20,7 +21,7 @@ import {
   writeFileSync,
 } from "node:fs";
 import { basename, join, relative, resolve, sep } from "node:path";
-import { pathToFileURL } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   decodeUploadedBytes,
@@ -63,10 +64,15 @@ export interface IngestReport {
   unsupported: number;
 }
 
-/** One file path ("path alias") below a scanned root. */
+/** One file path ("path alias") below one or more scanned roots. */
 export interface FilesystemSource {
   sourceUri: string;
+  /**
+   * The most specific (longest) scanned root containing the file, when overlapping roots were
+   * scanned. Independent of scan order; every containing root keeps its own membership.
+   */
   root: string;
+  /** POSIX path of the file below `root`. */
   relativePath: string;
   sha256: string;
   byteLength: number;
@@ -141,6 +147,19 @@ interface SourceRow {
   document_id: string | null;
 }
 
+/**
+ * Source rows with the root membership a `FilesystemSource` reports: the most specific (longest)
+ * scanned root containing the file. Nested roots of one file always differ in length, so the
+ * choice is independent of scan order; the root path breaks ties defensively.
+ */
+const SOURCE_ROWS_SQL = `SELECT s.source_uri, r.root, r.relative_path, s.sha256, s.byte_length,
+    s.status, s.parser, s.document_id
+  FROM sources AS s
+  JOIN source_roots AS r ON r.source_uri = s.source_uri AND r.root = (
+    SELECT m.root FROM source_roots AS m WHERE m.source_uri = s.source_uri
+    ORDER BY length(m.root) DESC, m.root LIMIT 1
+  )`;
+
 interface IndexManifest {
   schema: typeof INDEX_MANIFEST_SCHEMA;
   schemaVersion: typeof INDEX_MANIFEST_SCHEMA_VERSION;
@@ -167,8 +186,6 @@ function migrate(database: Database): void {
     ) STRICT`);
     database.run(`CREATE TABLE sources (
       source_uri TEXT PRIMARY KEY NOT NULL,
-      root TEXT NOT NULL,
-      relative_path TEXT NOT NULL,
       sha256 TEXT NOT NULL REFERENCES payloads (sha256),
       byte_length INTEGER NOT NULL,
       status TEXT NOT NULL CHECK (status IN ('parsed', 'unsupported')),
@@ -176,11 +193,19 @@ function migrate(database: Database): void {
       document_id TEXT UNIQUE,
       CHECK ((status = 'parsed') = (parser IS NOT NULL AND document_id IS NOT NULL))
     ) STRICT`);
-    database.run("CREATE INDEX sources_by_root ON sources (root)");
+    // Every scanned root that contains a source; overlapping roots each keep their membership.
+    database.run(`CREATE TABLE source_roots (
+      source_uri TEXT NOT NULL REFERENCES sources (source_uri) ON DELETE CASCADE,
+      root TEXT NOT NULL,
+      relative_path TEXT NOT NULL,
+      PRIMARY KEY (source_uri, root)
+    ) STRICT`);
+    database.run("CREATE INDEX source_roots_by_root ON source_roots (root)");
     database.run(`CREATE TABLE documents (
       id TEXT PRIMARY KEY NOT NULL,
       source_uri TEXT NOT NULL UNIQUE REFERENCES sources (source_uri) ON DELETE CASCADE,
-      record TEXT NOT NULL
+      record TEXT NOT NULL,
+      record_sha256 TEXT NOT NULL
     ) STRICT`);
     database.run(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   })();
@@ -214,8 +239,11 @@ class SqliteFilesystemCorpus implements FilesystemCorpus {
       unsupported: 0,
     };
 
-    const findSource = this.database.query<SourceRow, [string]>(
-      "SELECT * FROM sources WHERE source_uri = ?",
+    const findSource = this.database.query<{ sha256: string; parser: string | null }, [string]>(
+      "SELECT sha256, parser FROM sources WHERE source_uri = ?",
+    );
+    const countRoots = this.database.query<{ count: number }, [string]>(
+      "SELECT COUNT(*) AS count FROM source_roots WHERE source_uri = ?",
     );
     const seen = new Set<string>();
 
@@ -232,42 +260,41 @@ class SqliteFilesystemCorpus implements FilesystemCorpus {
 
         this.storePayload(hash, bytes);
         const existing = findSource.get(sourceUri);
-        const contentUnchanged =
-          existing !== null && existing.sha256 === hash && existing.parser === (parser?.id ?? null);
-        if (contentUnchanged && existing.root === resolvedRoot) {
-          report.unchanged += 1;
-          continue;
+        // A file first reached through another, overlapping root is unchanged: only its root
+        // membership is new, not its bytes or its parser.
+        const change =
+          existing === null
+            ? "added"
+            : existing.sha256 === hash && existing.parser === (parser?.id ?? null)
+              ? "unchanged"
+              : "updated";
+        report[change] += 1;
+        if (change !== "unchanged") {
+          this.writeSource({ sourceUri, sha256: hash, bytes, importedAt, parser });
         }
-        if (existing === null) report.added += 1;
-        else report.updated += 1;
-
-        if (contentUnchanged) {
-          // The same file reached through another scanned root: move the alias, keep the record.
-          this.database.run("UPDATE sources SET root = ?, relative_path = ? WHERE source_uri = ?", [
-            resolvedRoot,
-            relativePath,
-            sourceUri,
-          ]);
-          continue;
-        }
-        this.writeSource({
-          sourceUri,
-          root: resolvedRoot,
-          relativePath,
-          sha256: hash,
-          bytes,
-          importedAt,
-          parser,
-        });
+        this.database.run(
+          "INSERT OR REPLACE INTO source_roots (source_uri, root, relative_path) VALUES (?, ?, ?)",
+          [sourceUri, resolvedRoot, relativePath],
+        );
       }
 
-      const aliases = this.database
-        .query<{ source_uri: string }, [string]>("SELECT source_uri FROM sources WHERE root = ?")
+      // A source this root no longer contains loses its membership here. The source goes away
+      // when its file is gone or when no other scanned root still contains it.
+      const members = this.database
+        .query<{ source_uri: string; relative_path: string }, [string]>(
+          "SELECT source_uri, relative_path FROM source_roots WHERE root = ?",
+        )
         .all(resolvedRoot);
-      for (const { source_uri: sourceUri } of aliases) {
-        if (!seen.has(sourceUri)) {
+      for (const { source_uri: sourceUri, relative_path: relativePath } of members) {
+        if (seen.has(sourceUri)) continue;
+        report.removed += 1;
+        this.database.run("DELETE FROM source_roots WHERE source_uri = ? AND root = ?", [
+          sourceUri,
+          resolvedRoot,
+        ]);
+        const remaining = countRoots.get(sourceUri)?.count ?? 0;
+        if (remaining === 0 || !isRegularFile(join(resolvedRoot, ...relativePath.split("/")))) {
           this.database.run("DELETE FROM sources WHERE source_uri = ?", [sourceUri]);
-          report.removed += 1;
         }
       }
     });
@@ -278,7 +305,7 @@ class SqliteFilesystemCorpus implements FilesystemCorpus {
 
   async listSources(): Promise<FilesystemSource[]> {
     return this.database
-      .query<SourceRow, []>("SELECT * FROM sources")
+      .query<SourceRow, []>(SOURCE_ROWS_SQL)
       .all()
       .map(toFilesystemSource)
       .sort((left, right) => compareCodeUnits(left.sourceUri, right.sourceUri));
@@ -286,7 +313,7 @@ class SqliteFilesystemCorpus implements FilesystemCorpus {
 
   async resolveSource(filePath: string): Promise<FilesystemSource | undefined> {
     const row = this.database
-      .query<SourceRow, [string]>("SELECT * FROM sources WHERE source_uri = ?")
+      .query<SourceRow, [string]>(`${SOURCE_ROWS_SQL} WHERE s.source_uri = ?`)
       .get(pathToFileURL(resolve(filePath)).href);
     return row ? toFilesystemSource(row) : undefined;
   }
@@ -362,8 +389,6 @@ class SqliteFilesystemCorpus implements FilesystemCorpus {
 
   private writeSource(source: {
     sourceUri: string;
-    root: string;
-    relativePath: string;
     sha256: string;
     bytes: Uint8Array;
     importedAt: string;
@@ -371,12 +396,9 @@ class SqliteFilesystemCorpus implements FilesystemCorpus {
   }): void {
     const documentId = source.parser ? documentIdSync(source.sourceUri) : null;
     this.database.run(
-      `INSERT INTO sources
-         (source_uri, root, relative_path, sha256, byte_length, status, parser, document_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+      `INSERT INTO sources (source_uri, sha256, byte_length, status, parser, document_id)
+       VALUES (?, ?, ?, ?, ?, ?)
        ON CONFLICT (source_uri) DO UPDATE SET
-         root = excluded.root,
-         relative_path = excluded.relative_path,
          sha256 = excluded.sha256,
          byte_length = excluded.byte_length,
          status = excluded.status,
@@ -384,8 +406,6 @@ class SqliteFilesystemCorpus implements FilesystemCorpus {
          document_id = excluded.document_id`,
       [
         source.sourceUri,
-        source.root,
-        source.relativePath,
         source.sha256,
         source.bytes.byteLength,
         source.parser ? "parsed" : "unsupported",
@@ -398,7 +418,7 @@ class SqliteFilesystemCorpus implements FilesystemCorpus {
       return;
     }
 
-    const name = basename(source.relativePath);
+    const name = basename(fileURLToPath(source.sourceUri));
     let input: HtmlDocumentInput;
     try {
       input = source.parser.parse({ name, bytes: source.bytes, importedAt: source.importedAt });
@@ -409,10 +429,14 @@ class SqliteFilesystemCorpus implements FilesystemCorpus {
       );
     }
     const document = extractHtmlDocument({ ...input, id: documentId, sourceUri: source.sourceUri });
+    const record = JSON.stringify(document);
     this.database.run(
-      `INSERT INTO documents (id, source_uri, record) VALUES (?, ?, ?)
-       ON CONFLICT (id) DO UPDATE SET source_uri = excluded.source_uri, record = excluded.record`,
-      [documentId, source.sourceUri, JSON.stringify(document)],
+      `INSERT INTO documents (id, source_uri, record, record_sha256) VALUES (?, ?, ?, ?)
+       ON CONFLICT (id) DO UPDATE SET
+         source_uri = excluded.source_uri,
+         record = excluded.record,
+         record_sha256 = excluded.record_sha256`,
+      [documentId, source.sourceUri, record, sha256Hex(new TextEncoder().encode(record))],
     );
   }
 
@@ -439,17 +463,39 @@ class SqliteFilesystemCorpus implements FilesystemCorpus {
     );
   }
 
-  /** Deterministic digest of the indexed corpus state: every document's identity and inputs. */
+  /**
+   * Deterministic digest of the indexed corpus state: every document's identity, inputs and the
+   * hash of its stored record, so any record change (even bytes A -> B -> A with a new import
+   * time) makes an existing index stale. Root memberships are not indexed and do not count.
+   */
   private corpusDigest(): string {
     const rows = this.database
-      .query<{ source_uri: string; document_id: string; sha256: string; parser: string }, []>(
-        "SELECT source_uri, document_id, sha256, parser FROM sources WHERE status = 'parsed'",
+      .query<
+        {
+          source_uri: string;
+          document_id: string;
+          sha256: string;
+          parser: string;
+          record_sha256: string;
+        },
+        []
+      >(
+        `SELECT s.source_uri, d.id AS document_id, s.sha256, s.parser, d.record_sha256
+           FROM documents AS d JOIN sources AS s ON s.source_uri = d.source_uri`,
       )
       .all()
       .sort((left, right) => compareCodeUnits(left.source_uri, right.source_uri));
     const hash = createHash("sha256");
     for (const row of rows) {
-      hash.update(JSON.stringify([row.source_uri, row.document_id, row.sha256, row.parser]));
+      hash.update(
+        JSON.stringify([
+          row.source_uri,
+          row.document_id,
+          row.sha256,
+          row.parser,
+          row.record_sha256,
+        ]),
+      );
       hash.update("\n");
     }
     return hash.digest("hex");
@@ -498,6 +544,14 @@ function listRegularFiles(root: string, corpusDir: string): string[] {
   };
   visit(root);
   return files;
+}
+
+function isRegularFile(path: string): boolean {
+  try {
+    return lstatSync(path).isFile();
+  } catch {
+    return false;
+  }
 }
 
 function toFilesystemSource(row: SourceRow): FilesystemSource {

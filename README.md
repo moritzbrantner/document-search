@@ -95,9 +95,11 @@ The corpus directory holds:
   stored once per SHA-256 even when several paths hold identical bytes.
   Unsupported files are kept too, so later parser adapters can extract them from
   the corpus alone.
-- `corpus.sqlite`: one source record per file path (its `file://` URI, scanned
-  root, relative path, payload hash, parser id and document id) and the
-  extracted document records. It has no full-text tables.
+- `corpus.sqlite`: one source record per file path (its `file://` URI, payload
+  hash, parser id and document id), the scanned roots that contain each path,
+  and the extracted document records. It has no full-text tables. When
+  overlapping roots were scanned, `sources` reports the most specific (longest)
+  root and the path below it.
 - `index/`: derived search-index state written by `rebuild-index`. It can be
   deleted at any time and rebuilt from the corpus records.
 
@@ -107,7 +109,9 @@ extraction functions as browser uploads, so both modes produce the same
 derived only from its source URI, so each path keeps its own document and a
 re-scan is deterministic: unchanged files keep their records and original import
 time, changed bytes keep the document id, and deleted files lose their alias.
-Re-scanning one root never removes the aliases of another root. Files no parser
+Re-scanning one root never removes files of another root that still exist, and
+a file found through another, overlapping root counts as unchanged. A deleted
+file is removed by re-scanning any root that contained it. Files no parser
 adapter supports, such as PDF, are recorded as `unsupported` without a document;
 PDF extraction is not implemented yet.
 
