@@ -4,6 +4,7 @@
 // `CorpusRecord`/`CorpusItemRef` enums, string-to-string metadata and bare
 // lowercase SHA-256 content hashes. Typed ids use corpus-core's length-delimited
 // `derive`, so a Rust consumer recomputes the same identities.
+import { denseHeadingPath } from "../domain/headingPath";
 import type { ExtractedDocument } from "../domain/types";
 
 export const CORPUS_CORE_BATCH_SCHEMA = "moenarch_corpus_core_batch";
@@ -201,7 +202,7 @@ export async function createCorpusCoreBatch(
     for (const paragraph of paragraphs) {
       const end = start + scalarLength(paragraph.text);
       const metadata: CorpusMetadata = {
-        heading_path: JSON.stringify(paragraph.headingPath),
+        heading_path: JSON.stringify(denseHeadingPath(paragraph.headingPath)),
         paragraph_ordinal: String(paragraph.ordinal),
       };
       if (paragraph.sourceSelector) metadata.source_selector = paragraph.sourceSelector;

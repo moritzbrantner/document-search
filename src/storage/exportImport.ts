@@ -1,3 +1,4 @@
+import { withDenseHeadingPaths } from "../domain/headingPath";
 import type { CorpusSnapshot, ExtractedDocument } from "../domain/types";
 
 export function createCorpusSnapshot(documents: ExtractedDocument[]): CorpusSnapshot {
@@ -17,5 +18,5 @@ export function parseCorpusSnapshot(json: string): CorpusSnapshot {
   if (parsed.schemaVersion !== 1 || !Array.isArray(parsed.documents)) {
     throw new Error("Unsupported corpus snapshot.");
   }
-  return parsed as CorpusSnapshot;
+  return { ...(parsed as CorpusSnapshot), documents: parsed.documents.map(withDenseHeadingPaths) };
 }
