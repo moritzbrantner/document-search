@@ -72,6 +72,50 @@ Search is request-scoped: the stored corpus is transformed into an in-memory
 results map back to extracted document paragraphs. `nlp-stack` remains
 authoritative for retrieval and ranking semantics.
 
+## Local filesystem corpus mode
+
+For document folders too large for the browser demo, a local companion CLI keeps
+a managed corpus directory on disk. It runs under Bun only and is never part of
+the browser/Vite bundle; the IndexedDB browser mode is unchanged.
+
+```bash
+bun run corpus ingest --corpus ./my-corpus [--imported-at <iso>] ~/Documents/notes
+bun run corpus sources --corpus ./my-corpus
+bun run corpus rebuild-index --corpus ./my-corpus
+bun run corpus search --corpus ./my-corpus [--top-k 10] [--mode hybrid|lexical|semantic] "query"
+```
+
+Every command prints JSON to stdout. `ingest` scans the folder recursively
+(regular files only; symlinks are not followed) and reports how many path
+aliases were added, updated, unchanged, removed, and unsupported.
+
+The corpus directory holds:
+
+- `payloads/<sha256[0..2]>/<sha256>`: the raw bytes of every scanned file,
+  stored once per SHA-256 even when several paths hold identical bytes.
+  Unsupported files are kept too, so later parser adapters can extract them from
+  the corpus alone.
+- `corpus.sqlite`: one source record per file path (its `file://` URI, scanned
+  root, relative path, payload hash, parser id and document id) and the
+  extracted document records. It has no full-text tables.
+- `index/`: derived search-index state written by `rebuild-index`. It can be
+  deleted at any time and rebuilt from the corpus records.
+
+Supported files (HTML, Markdown, plain text) go through the same import and
+extraction functions as browser uploads, so both modes produce the same
+`ExtractedDocument` records and the same corpus-core export. A document's id is
+derived only from its source URI, so each path keeps its own document and a
+re-scan is deterministic: unchanged files keep their records and original import
+time, changed bytes keep the document id, and deleted files lose their alias.
+Re-scanning one root never removes the aliases of another root. Files no parser
+adapter supports, such as PDF, are recorded as `unsupported` without a document;
+PDF extraction is not implemented yet.
+
+Search refuses to run while the index is missing or stale (after an ingest that
+changed the corpus) and asks for `rebuild-index`. It then runs the same
+request-scoped `nlp-stack` search as the browser, so ranking and filtering stay
+in `nlp-stack`.
+
 ## Heading-path export contract
 
 Paragraph heading paths are dense arrays of **actual heading text**, from outermost active
