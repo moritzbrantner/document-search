@@ -73,10 +73,11 @@ for (const { name, html, expectedPaths } of cases) {
     // Array.every alone ignores holes; check keys as well as serialized values.
     for (const path of [...extractedPaths, ...sourcePaths, ...corpusPaths]) {
       expect(Array.isArray(path)).toBe(true);
-      if (!Array.isArray(path)) continue;
-      expect(Object.keys(path)).toHaveLength(path.length);
+      if (Array.isArray(path)) {
+        expect(Object.keys(path)).toHaveLength(path.length);
       expect(path.every((heading) => typeof heading === "string")).toBe(true);
       expect(path).not.toContain(null);
+      }
     }
   });
 }
