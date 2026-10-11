@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 5,
+  "cargo": { "repositories": [] },
+  "javascript": {
+    "localOnly": true,
+    "repositories": [
+      {
+        "git": "https://github.com/moritzbrantner/nlp-stack-wasm.git",
+        "rev": "8da8f49f5c28882a1c287c38231c961c3a290487",
+        "localPath": "../nlp-stack-wasm",
+        "packages": [{ "package": "@moritzbrantner/nlp-stack-wasm" }],
+        "upstreams": [
+          {
+            "env": "NLP_STACK_SOURCE_DIR",
+            "git": "https://github.com/moritzbrantner/nlp-stack.git",
+            "rev": "1ea22b3dd802e79444ab355968066390f21cfcd8",
+            "localPath": "../nlp-stack",
+            "revisionField": "nlpStack.commit"
+          }
+        ]
+      }
+    ]
+  }
+}

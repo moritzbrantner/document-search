@@ -29,3 +29,4 @@ dist-ssr
 # Playwright browser acceptance output
 test-results
 playwright-report
+/.cargo/config.toml

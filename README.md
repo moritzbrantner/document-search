@@ -28,6 +28,15 @@ To move to a newer nlp-stack revision, update the `#<commit>` of
 `@moritzbrantner/nlp-stack-wasm` in `package.json` to a newer commit of that
 repository and run `bun install`.
 
+To develop against local checkouts instead, keep `nlp-stack-wasm` and
+`nlp-stack` next to this repository at the revisions declared in
+`.coding-tooling.source-deps.json` and run `bash scripts/source-deps activate`
+(needs [coding-tooling](https://github.com/moritzbrantner/coding-tooling) on
+`PATH` or a sibling checkout). It builds the WASM wrapper from the local
+`nlp-stack` checkout through `NLP_STACK_SOURCE_DIR`; `bash scripts/source-deps
+status` shows the active revisions and `bash scripts/source-deps deactivate`
+restores the ordinary install.
+
 `.repository.toml` is the machine-readable repository contract: this repository
 owns the corpus and UI, `nlp-stack` owns text extraction, indexing and retrieval
 semantics. `coding-tooling repository contract --root . --execute --json`

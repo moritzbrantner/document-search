@@ -15,7 +15,7 @@
     "test:e2e": "playwright test"
   },
   "dependencies": {
-    "@moritzbrantner/nlp-stack-wasm": "github:moritzbrantner/nlp-stack-wasm#c289d5b13458ebcd429695baa679266357dd0951",
+    "@moritzbrantner/nlp-stack-wasm": "github:moritzbrantner/nlp-stack-wasm#8da8f49f5c28882a1c287c38231c961c3a290487",
     "@tanstack/react-query": "^5.101.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
