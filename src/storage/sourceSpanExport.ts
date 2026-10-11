@@ -1,3 +1,4 @@
+import { denseHeadingPath } from "../domain/headingPath";
 import type {
   ExtractedDocument,
   SourceRecordV1,
@@ -48,7 +49,7 @@ export async function createSourceSpanBatch(
           byteEnd,
           paragraphOrdinal: paragraph.ordinal,
           ...(paragraph.sourceSelector ? { sourceSelector: paragraph.sourceSelector } : {}),
-          headingPath: paragraph.headingPath,
+          headingPath: denseHeadingPath(paragraph.headingPath),
         },
         metadata: {},
       });
