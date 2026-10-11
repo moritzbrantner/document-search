@@ -2,9 +2,7 @@ import { readFile } from "node:fs/promises";
 
 import { expect, test } from "@playwright/test";
 
-test("browser DOMParser imports headings without sparse paths when levels are skipped", async ({
-  page,
-}, testInfo) => {
+test("browser DOMParser exports dense skipped-level headings", async ({ page }, testInfo) => {
   await page.goto("./");
   await expect(page.getByRole("heading", { level: 1, name: "Document Search" })).toBeVisible();
   await expect(page.getByRole("button", { name: /^Delete / })).toHaveCount(5);
