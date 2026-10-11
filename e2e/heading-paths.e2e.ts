@@ -54,7 +54,7 @@ test("browser DOMParser imports headings without sparse paths when levels are sk
       expect(Array.isArray(paragraph.headingPath)).toBe(true);
       if (Array.isArray(paragraph.headingPath)) {
         expect(Object.keys(paragraph.headingPath)).toHaveLength(paragraph.headingPath.length);
-      expect(paragraph.headingPath.every((heading) => typeof heading === "string")).toBe(true);
+        expect(paragraph.headingPath.every((heading) => typeof heading === "string")).toBe(true);
       }
     }
   }
