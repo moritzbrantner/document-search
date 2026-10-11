@@ -71,3 +71,25 @@ Search is request-scoped: the stored corpus is transformed into an in-memory
 `text-index-wasm` search request for each query. Paragraph chunking is used so
 results map back to extracted document paragraphs. `nlp-stack` remains
 authoritative for retrieval and ranking semantics.
+
+## Heading-path export contract
+
+Paragraph heading paths are dense arrays of **actual heading text**, from outermost active
+ancestor to innermost heading. An HTML heading's numeric level controls when existing
+headings are replaced, but skipped levels do not add placeholders:
+
+- `<h2>A</h2><p>x</p>` gives `["A"]` for the heading and paragraph.
+- `<h1>T</h1><h3>B</h3><p>y</p>` gives `["T", "B"]` for the paragraph.
+- A following `<h2>C</h2>` replaces `B`, yielding `["T", "C"]`.
+
+The same representation is emitted as `SourceLocatorV1.headingPath` in the
+`source_span_interchange` v1 JSON export, and as a JSON-encoded string array in
+corpus-core segment `metadata.heading_path` in the `moenarch_corpus_core_batch` v1
+JSONL export. Neither includes `null`, sparse holes, or empty strings for skipped
+levels. Heading text and ancestor ordering are preserved, and source/segment ID
+derivation remains unchanged. A source-span revision may change when its structural
+heading metadata changes.
+
+This rule applies during extraction to newly imported documents. Documents already
+stored with legacy sparse heading paths need re-extraction from their original HTML;
+exports do not silently rewrite their stored provenance.

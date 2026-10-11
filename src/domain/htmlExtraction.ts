@@ -61,6 +61,8 @@ export function extractHtmlDocument(input: HtmlDocumentInput): ExtractedDocument
   };
 }
 
+type ActiveHeading = { level: number; text: string };
+
 interface ParsedBlock {
   text: string;
   selector?: string;
@@ -89,7 +91,7 @@ function parseWithDomParser(html: string): ParsedHtml {
   const title = normalizeWhitespace(document.querySelector("title")?.textContent ?? "");
   const firstH1 = normalizeWhitespace(document.querySelector("h1")?.textContent ?? "");
   const blocks: ParsedBlock[] = [];
-  const headingPath: string[] = [];
+  const headings: ActiveHeading[] = [];
   const root = document.body ?? document.documentElement;
 
   for (const element of Array.from(root.querySelectorAll(Array.from(BLOCK_TAGS).join(",")))) {
@@ -104,13 +106,13 @@ function parseWithDomParser(html: string): ParsedHtml {
     }
 
     if (HEADING_TAGS.has(tagName)) {
-      updateHeadingPath(headingPath, tagName, text);
+      updateHeadingPath(headings, tagName, text);
     }
 
     blocks.push({
       text,
       selector: createSelector(element),
-      headingPath: HEADING_TAGS.has(tagName) ? [...headingPath] : [...headingPath],
+      headingPath: headings.map(({ text }) => text),
     });
   }
 
@@ -203,9 +205,9 @@ function parseWithFallbackTree(html: string): ParsedHtml {
   const title = normalizeWhitespace(findFirstText(root, "title"));
   const firstH1 = normalizeWhitespace(findFirstText(root, "h1"));
   const blocks: ParsedBlock[] = [];
-  const headingPath: string[] = [];
+  const headings: ActiveHeading[] = [];
 
-  walkFallbackBlocks(root, headingPath, blocks);
+  walkFallbackBlocks(root, headings, blocks);
   return { title, firstH1, blocks };
 }
 
@@ -218,24 +220,28 @@ function closeTag(stack: TreeNode[], tagName: string): void {
   }
 }
 
-function walkFallbackBlocks(node: TreeNode, headingPath: string[], blocks: ParsedBlock[]): void {
+function walkFallbackBlocks(
+  node: TreeNode,
+  headings: ActiveHeading[],
+  blocks: ParsedBlock[],
+): void {
   if (BLOCK_TAGS.has(node.tagName) && !hasDescendantBlock(node)) {
     const text = normalizeWhitespace(collectText(node));
     if (text) {
       if (HEADING_TAGS.has(node.tagName)) {
-        updateHeadingPath(headingPath, node.tagName, text);
+        updateHeadingPath(headings, node.tagName, text);
       }
       blocks.push({
         text,
         selector: node.tagName,
-        headingPath: [...headingPath],
+        headingPath: headings.map(({ text }) => text),
       });
     }
     return;
   }
 
   for (const child of node.children) {
-    walkFallbackBlocks(child, headingPath, blocks);
+    walkFallbackBlocks(child, headings, blocks);
   }
 }
 
@@ -269,10 +275,13 @@ function tagNameFromToken(token: string): string {
   );
 }
 
-function updateHeadingPath(headingPath: string[], tagName: string, text: string): void {
+function updateHeadingPath(headings: ActiveHeading[], tagName: string, text: string): void {
   const level = Number(tagName.slice(1));
-  headingPath.splice(level - 1);
-  headingPath[level - 1] = text;
+  // Retain actual ancestor levels so skipped HTML levels need no empty path entries.
+  while (headings.length > 0 && headings[headings.length - 1]!.level >= level) {
+    headings.pop();
+  }
+  headings.push({ level, text });
 }
 
 export function normalizeWhitespace(text: string): string {
