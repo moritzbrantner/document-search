@@ -72,7 +72,6 @@ Search is request-scoped: the stored corpus is transformed into an in-memory
 results map back to extracted document paragraphs. `nlp-stack` remains
 authoritative for retrieval and ranking semantics.
 
-
 ## Heading-path export contract
 
 Paragraph heading paths are dense arrays of **actual heading text**, from outermost active
