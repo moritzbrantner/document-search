@@ -19,4 +19,11 @@ export default defineConfig([
       globals: globals.browser,
     },
   },
+  {
+    // The filesystem corpus mode runs under Bun, never in the browser bundle.
+    files: ["src/filesystem/**/*.ts"],
+    languageOptions: {
+      globals: globals.node,
+    },
+  },
 ]);
