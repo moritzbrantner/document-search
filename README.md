@@ -26,7 +26,10 @@ and the `wasm32-unknown-unknown` target are installed on first use) and
 `wasm-pack` (installed into `~/.cache/nlp-stack-wasm` when it is not on `PATH`).
 To move to a newer nlp-stack revision, update the `#<commit>` of
 `@moritzbrantner/nlp-stack-wasm` in `package.json` to a newer commit of that
-repository and run `bun install`.
+repository and run `bun install`. Then set the `nlp-stack-wasm` `rev` in
+`.coding-tooling.source-deps.json` to that commit and its `nlp-stack` upstream
+`rev` to that commit's `nlpStack.commit`, so source mode stays on the same
+revisions.
 
 To develop against local checkouts instead, keep `nlp-stack-wasm` and
 `nlp-stack` next to this repository at the revisions declared in
