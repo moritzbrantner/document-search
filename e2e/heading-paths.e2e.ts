@@ -7,6 +7,7 @@ test("browser DOMParser imports headings without sparse paths when levels are sk
 }, testInfo) => {
   await page.goto("./");
   await expect(page.getByRole("heading", { level: 1, name: "Document Search" })).toBeVisible();
+  await expect(page.getByRole("button", { name: /^Delete / })).toHaveCount(5);
 
   const examples = [
     {
@@ -51,9 +52,10 @@ test("browser DOMParser imports headings without sparse paths when levels are sk
     expect(document?.paragraphs.map((paragraph) => paragraph.headingPath)).toEqual(paths);
     for (const paragraph of document?.paragraphs ?? []) {
       expect(Array.isArray(paragraph.headingPath)).toBe(true);
-      if (!Array.isArray(paragraph.headingPath)) continue;
-      expect(Object.keys(paragraph.headingPath)).toHaveLength(paragraph.headingPath.length);
+      if (Array.isArray(paragraph.headingPath)) {
+        expect(Object.keys(paragraph.headingPath)).toHaveLength(paragraph.headingPath.length);
       expect(paragraph.headingPath.every((heading) => typeof heading === "string")).toBe(true);
+      }
     }
   }
 });
