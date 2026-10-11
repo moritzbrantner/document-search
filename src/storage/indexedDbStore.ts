@@ -1,4 +1,3 @@
-import { withDenseHeadingPaths } from "../domain/headingPath";
 import type { CorpusSnapshot, ExtractedDocument } from "../domain/types";
 
 const DB_NAME = "document-search";
@@ -10,12 +9,11 @@ const BLOCKED_UPGRADE_MESSAGE =
   "Local corpus upgrade is blocked by another open Document Search tab. Close other tabs and reload.";
 
 export async function listDocuments(): Promise<ExtractedDocument[]> {
-  const documents = await withDatabase((database) =>
-    requestToPromise<ExtractedDocument[]>(
+  return withDatabase((database) =>
+    requestToPromise(
       database.transaction(DOCUMENT_STORE, "readonly").objectStore(DOCUMENT_STORE).getAll(),
     ),
   );
-  return documents.map(withDenseHeadingPaths);
 }
 
 export async function putDocument(document: ExtractedDocument): Promise<void> {
