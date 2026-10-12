@@ -31,7 +31,7 @@ jobs:
       # @moritzbrantner/nlp-stack-wasm builds its WASM from a pinned nlp-stack commit on install
       # (prepare script): it needs the Rust toolchain, the wasm32 target and wasm-pack.
       - name: Set up Rust
-        uses: dtolnay/rust-toolchain@89b12181fb390509a0842a86cc55eeb8eb928c1d # stable
+        uses: dtolnay/rust-toolchain@686976e191b89faba57d3206551f0f330d8cb249 # stable
         with:
           toolchain: 1.95.0
           targets: wasm32-unknown-unknown
