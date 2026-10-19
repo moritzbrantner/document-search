@@ -16,7 +16,7 @@
     "corpus": "bun src/filesystem/cli.ts"
   },
   "dependencies": {
-    "@moritzbrantner/nlp-stack-wasm": "github:moritzbrantner/nlp-stack-wasm#8da8f49f5c28882a1c287c38231c961c3a290487",
+    "@moritzbrantner/nlp-stack-wasm": "github:moritzbrantner/nlp-stack-wasm#e9b1dc19c7d7c538cdc2d7c015a95552a7864d29",
     "@tanstack/react-query": "^5.101.0",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"

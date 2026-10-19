@@ -5,7 +5,7 @@
     "": {
       "name": "document-search",
       "dependencies": {
-        "@moritzbrantner/nlp-stack-wasm": "github:moritzbrantner/nlp-stack-wasm#8da8f49f5c28882a1c287c38231c961c3a290487",
+        "@moritzbrantner/nlp-stack-wasm": "github:moritzbrantner/nlp-stack-wasm#e9b1dc19c7d7c538cdc2d7c015a95552a7864d29",
         "@tanstack/react-query": "^5.101.0",
         "react": "^19.2.6",
         "react-dom": "^19.2.6",
@@ -111,7 +111,7 @@
 
     "@keyv/serialize": ["@keyv/serialize@1.1.1", "", {}, "sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA=="],
 
-    "@moritzbrantner/nlp-stack-wasm": ["@moritzbrantner/nlp-stack-wasm@github:moritzbrantner/nlp-stack-wasm#8da8f49", {}, "moritzbrantner-nlp-stack-wasm-8da8f49", "sha512-2eJ/9tPUUHOu5qdECPH2YT1Lng1JryI93312BRWmFBv6HgGTwAIKnY0qR9dKhHm8eRWZKeTspvvMHJs2K1AJIw=="],
+    "@moritzbrantner/nlp-stack-wasm": ["@moritzbrantner/nlp-stack-wasm@github:moritzbrantner/nlp-stack-wasm#e9b1dc1", {}, "moritzbrantner-nlp-stack-wasm-e9b1dc1", "sha512-E9nCR2SGURtAIy7MvhlTblXYVQ+8DCEJCvwdCVT+aD6OLgK+Mwrp31NpJu0LRAJR+7Jq3+eZaUsp5UXAf5MWMQ=="],
 
     "@oxc-project/types": ["@oxc-project/types@0.154.0", "", {}, "sha512-KYOUGQFlLWR+s4QMV2Q9ko38TZm7EdO87Qm7rvZLqk/webse/cDjtyxKhg/47l0byCbs/k46LT8qc4PKjAikzA=="],
 
