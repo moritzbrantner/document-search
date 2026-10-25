@@ -126,6 +126,7 @@ import {
   filesystemDocumentId,
   openFilesystemCorpus,
   type FilesystemCorpus,
+  type FilesystemSource,
   type ParserAdapter,
 } from "../filesystem/corpusStore";
 import {
@@ -746,11 +747,18 @@ describe("CLI companion", () => {
       updated: 0,
       unchanged: 0,
       removed: 0,
-      unsupported: 2,
+      // The CLI also runs the PDF text adapter (#22): the fake PDF is a malformed PDF, not an
+      // unsupported file.
+      unsupported: 1,
     });
 
     const sources = runCli(["sources", "--corpus", corpusDir]);
     expect(sources.status).toBe(0);
+    expect(
+      (JSON.parse(sources.stdout) as FilesystemSource[]).find((source) =>
+        source.relativePath.endsWith("report.pdf"),
+      ),
+    ).toMatchObject({ status: "malformed", parser: "pdf-text", documentId: null });
 
     const rebuild = runCli(["rebuild-index", "--corpus", corpusDir]);
     expect(rebuild.status).toBe(0);

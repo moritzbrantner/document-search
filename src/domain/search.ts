@@ -140,7 +140,7 @@ async function runSearch(
         language: "en",
         metadata: {
           attributes: {
-            sourceKind: "html",
+            sourceKind: document.asset ? "pdf" : "html",
             sourceUri: document.sourceUri ?? "",
             importedAt: document.importedAt,
             paragraphCount: String(document.paragraphs.length),
@@ -185,6 +185,10 @@ function toSearchResultView(
   const document = documents.find((candidate) => candidate.id === documentId);
   const snippet = raw.snippet ?? raw.chunk?.text ?? "";
   const paragraphOrdinal = raw.chunk?.ordinal;
+  const page =
+    paragraphOrdinal === undefined
+      ? undefined
+      : document?.paragraphs.find((paragraph) => paragraph.ordinal === paragraphOrdinal)?.page;
 
   return {
     documentId,
@@ -193,6 +197,7 @@ function toSearchResultView(
     score: raw.score ?? 0,
     snippet,
     paragraphOrdinal,
+    ...(page === undefined ? {} : { page }),
     exactPhraseMatches: raw.matchedPhrases ?? findExactPhraseMatches(snippet, phrases),
     fuzzyMatches: raw.fuzzyMatches ?? [],
   };

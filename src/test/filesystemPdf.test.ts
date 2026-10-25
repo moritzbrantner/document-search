@@ -113,6 +113,7 @@
  * adapter. The #21 suite pins `DEFAULT_PARSER_ADAPTERS` to `["document-import"]` and a fake
  * `report.pdf` to `unsupported`, so these tests pass the parsers explicitly.
  */
+import { Database } from "bun:sqlite";
 import { afterEach, describe, expect, test } from "bun:test";
 import { createHash } from "node:crypto";
 import {
@@ -1073,5 +1074,57 @@ describe("AC7: existing text formats and documentation", () => {
     expect(readme).toMatch(/embedded\s+PDF\s+text/i);
     expect(readme).toMatch(/scanned\s+PDFs?\b[^.]*\bOCR\b/i);
     expect(readme).not.toMatch(/PDF\s+extraction\s+is\s+not\s+implemented/i);
+  });
+});
+
+describe("schema migration", () => {
+  test("a schema-2 corpus keeps its sources and documents and then accepts PDF outcomes", async () => {
+    const root = tempDir("root");
+    writeFile(root, "notes/heron.md", NOTES_MD);
+    writeFile(root, "bad/malformed.pdf", fixture("malformed.pdf"));
+    const corpusDir = tempDir("corpus");
+    const corpus = await open(corpusDir);
+    await corpus.ingestFolder(root, { importedAt: IMPORTED_AT });
+    const sourcesBefore = await corpus.listSources();
+    const documentsBefore = await corpus.listDocuments();
+    await corpus.rebuildSearchIndex();
+    await closeCorpus(corpus);
+
+    // Rewrite the database to the schema-2 shape of #20/#21 (no extractor, detail or
+    // extractions table, the old status CHECK).
+    const database = new Database(join(corpusDir, "corpus.sqlite"));
+    database.run("DROP TABLE extractions");
+    database.run(`CREATE TABLE sources_v2 (
+        source_uri TEXT PRIMARY KEY NOT NULL,
+        sha256 TEXT NOT NULL REFERENCES payloads (sha256),
+        byte_length INTEGER NOT NULL,
+        status TEXT NOT NULL CHECK (status IN ('parsed', 'unsupported')),
+        parser TEXT,
+        document_id TEXT UNIQUE,
+        CHECK ((status = 'parsed') = (parser IS NOT NULL AND document_id IS NOT NULL))
+      ) STRICT`);
+    database.run(`INSERT INTO sources_v2
+      SELECT source_uri, sha256, byte_length, status, parser, document_id FROM sources`);
+    database.run("DROP TABLE sources");
+    database.run("ALTER TABLE sources_v2 RENAME TO sources");
+    database.run("PRAGMA user_version = 2");
+    database.close();
+
+    const reopened = await open(corpusDir);
+    expect(await reopened.listSources()).toEqual(sourcesBefore);
+    expect(await reopened.listDocuments()).toEqual(documentsBefore);
+    expect((await reopened.indexStatus()).state).toBe("current");
+
+    await reopened.ingestFolder(root, {
+      importedAt: LATER,
+      parsers: [DOCUMENT_IMPORT_ADAPTER, await pdfAdapter()],
+    });
+    expect((await sourceAt(reopened, join(root, "bad", "malformed.pdf")))?.status).toBe(
+      "malformed",
+    );
+    // Foreign keys still hold after the table rebuild.
+    const check = new Database(join(corpusDir, "corpus.sqlite"), { readonly: true });
+    expect(check.query("PRAGMA foreign_key_check").all()).toEqual([]);
+    check.close();
   });
 });

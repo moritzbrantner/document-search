@@ -13,6 +13,23 @@ export interface HtmlDocumentInput {
   original?: OriginalDocumentContent;
 }
 
+/** Identity of the extraction library and configuration that derived a document's text. */
+export interface ExtractorIdentity {
+  name: string;
+  version: string;
+  configuration: Record<string, string | number | boolean>;
+}
+
+/** The binary original a document's text was extracted from (absent for text imports). */
+export interface DocumentAsset {
+  mediaType: "application/pdf";
+  /** SHA-256 of the exact original bytes. */
+  sha256: string;
+  byteLength: number;
+  /** Physical page count, including pages without text. */
+  pageCount: number;
+}
+
 export interface ExtractedParagraph {
   id: string;
   documentId: string;
@@ -20,6 +37,8 @@ export interface ExtractedParagraph {
   text: string;
   sourceSelector?: string;
   headingPath: string[];
+  /** 1-based physical page of a paged original (PDF); absent for text imports. */
+  page?: number;
 }
 
 export interface ExtractedDocument {
@@ -32,6 +51,10 @@ export interface ExtractedDocument {
   importedAt: string;
   /** Absent for documents stored before originals were retained. */
   original?: OriginalDocumentContent;
+  /** Binary original (PDF); its text is a derived representation. Absent for text imports. */
+  asset?: DocumentAsset;
+  /** Extractor that derived the text from `asset`; absent for text imports. */
+  extractor?: ExtractorIdentity;
   stats: {
     words: number;
     sentences: number;
@@ -137,6 +160,8 @@ export interface SearchResultView {
   score: number;
   snippet: string;
   paragraphOrdinal?: number;
+  /** 1-based physical page of the hit's paragraph; absent for text imports. */
+  page?: number;
   exactPhraseMatches: string[];
   fuzzyMatches: FuzzyTermMatchView[];
 }
