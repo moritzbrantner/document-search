@@ -4,7 +4,19 @@ import { readFileSync, writeFileSync } from "node:fs";
 import { parseArgs } from "node:util";
 
 import type { SearchRequestState } from "../domain/types";
-import { openFilesystemCorpus, type FilesystemCorpus } from "./corpusStore";
+import {
+  DOCUMENT_IMPORT_ADAPTER,
+  openFilesystemCorpus,
+  type FilesystemCorpus,
+  type ParserAdapter,
+} from "./corpusStore";
+import { createPdfTextAdapter } from "./pdfAdapter";
+
+/** The CLI indexes HTML, Markdown and plain text, and embedded PDF text (default limits). */
+const CLI_PARSER_ADAPTERS: readonly ParserAdapter[] = [
+  DOCUMENT_IMPORT_ADAPTER,
+  createPdfTextAdapter(),
+];
 
 const USAGE = `Usage:
   bun run corpus ingest --corpus <dir> [--imported-at <iso>] <root>
@@ -42,7 +54,10 @@ const COMMANDS: Record<
       if (importedAt !== undefined && Number.isNaN(Date.parse(importedAt))) {
         throw new UsageError(`--imported-at must be an ISO timestamp, got "${importedAt}".`);
       }
-      return corpus.ingestFolder(root, importedAt === undefined ? {} : { importedAt });
+      return corpus.ingestFolder(root, {
+        parsers: CLI_PARSER_ADAPTERS,
+        ...(importedAt === undefined ? {} : { importedAt }),
+      });
     },
   },
   sources: {

@@ -12,6 +12,8 @@ export const CORPUS_CORE_BATCH_SCHEMA_VERSION = 1;
 
 const PRODUCER_NAME = "document-search";
 const EXTRACTION_PRODUCER = "document-search/html-extraction";
+/** Producer of text extracted from a binary original (PDF) in filesystem mode. */
+const BINARY_EXTRACTION_PRODUCER = "document-search/pdf-text";
 /** Separator `extractHtmlDocument` places between paragraphs in `document.text`. */
 const PARAGRAPH_SEPARATOR = "\n\n";
 const TEXT_PAYLOAD_MEDIA_TYPE = "text/plain; charset=utf-8";
@@ -184,6 +186,36 @@ export async function createCorpusCoreBatch(
     if (capture) {
       records.push(...captureSourceAndAsset(capture, sourceId, assetId, document.title));
       if (capture.payloadText !== null) addPayload(capturePayload(capture));
+    } else if (document.asset) {
+      // A binary original (PDF): the asset is the exact file by hash; its bytes are not a text
+      // payload, and the extracted text below is a derived representation.
+      records.push({
+        record_type: "source",
+        record: {
+          id: sourceId,
+          kind: "inline",
+          uri,
+          metadata: sortedMetadata({ title: document.title, imported_at: document.importedAt }),
+        },
+      });
+      records.push({
+        record_type: "asset",
+        record: {
+          id: assetId,
+          source_id: sourceId,
+          kind: "document",
+          content: {
+            uri,
+            hash: document.asset.sha256,
+            media_type: document.asset.mediaType,
+            byte_length: document.asset.byteLength,
+          },
+          metadata: sortedMetadata({
+            content_basis: "original",
+            page_count: String(document.asset.pageCount),
+          }),
+        },
+      });
     } else {
       records.push({
         record_type: "source",
@@ -229,6 +261,23 @@ export async function createCorpusCoreBatch(
       record_type: "representation",
       id: representationId,
     };
+    let representationProvenance = provenance("extract_text", producerRevision, [assetRef]);
+    let representationMetadata: CorpusMetadata = capture?.extractor
+      ? { extractor: capture.extractor }
+      : {};
+    if (document.extractor) {
+      const configuration = canonicalJson(document.extractor.configuration);
+      representationProvenance = {
+        ...representationProvenance,
+        producer: BINARY_EXTRACTION_PRODUCER,
+        parameters_hash: await sha256Hex(configuration),
+      };
+      representationMetadata = sortedMetadata({
+        extractor_configuration: configuration,
+        extractor_name: document.extractor.name,
+        extractor_version: document.extractor.version,
+      });
+    }
     records.push({
       record_type: "representation",
       record: {
@@ -237,8 +286,8 @@ export async function createCorpusCoreBatch(
         kind: "extracted_text",
         content_hash: textHash,
         content: null,
-        provenance: provenance("extract_text", producerRevision, [assetRef]),
-        metadata: capture?.extractor ? { extractor: capture.extractor } : {},
+        provenance: representationProvenance,
+        metadata: representationMetadata,
       },
     });
     addPayload({ hash: textHash, media_type: TEXT_PAYLOAD_MEDIA_TYPE, text: document.text });
@@ -269,7 +318,8 @@ export async function createCorpusCoreBatch(
           locator: {
             byte_range: null,
             character_range: { start, end },
-            page_index: null,
+            // corpus-core page indexes are zero-based; document pages are 1-based.
+            page_index: paragraph.page === undefined ? null : paragraph.page - 1,
             time_range_ms: null,
             frame_range: null,
             selectors: { character_unit: "unicode_scalar", representation_id: representationId },
@@ -481,6 +531,15 @@ function provenance(
     inputs,
     parameters_hash: null,
   };
+}
+
+/** JSON of a flat object with its keys sorted, so equal configurations hash equally. */
+function canonicalJson(value: Record<string, string | number | boolean>): string {
+  return JSON.stringify(
+    Object.fromEntries(
+      Object.entries(value).sort(([left], [right]) => compareCodeUnits(left, right)),
+    ),
+  );
 }
 
 function sortedMetadata(metadata: CorpusMetadata): CorpusMetadata {

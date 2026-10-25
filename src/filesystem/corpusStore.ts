@@ -2,8 +2,10 @@
 //
 // Layout of `<corpusDir>`:
 // - `payloads/<sha256[0..2]>/<sha256>`: raw bytes of every scanned file, stored once per hash.
-// - `corpus.sqlite`: source/path aliases, parser state and extracted document records.
-//   It holds no full-text tables; retrieval and ranking stay in nlp-stack.
+// - `corpus.sqlite`: source/path aliases, parser state (including failure outcomes),
+//   reusable binary extractions (`extractions`, keyed by payload hash, parser id and extractor
+//   identity) and extracted document records. It holds no full-text tables; retrieval and
+//   ranking stay in nlp-stack.
 // - `index/`: derived search-index state, rebuildable from the corpus records at any time.
 // - `warc/<capture-id>.warc`: one WARC 1.1 file per explicit web capture (`captureUrls`); the
 //   final response payload is also stored under `payloads/` like a scanned file.
@@ -31,9 +33,11 @@ import {
   parseUploadedDocument,
 } from "../domain/documentImport";
 import { extractHtmlDocument } from "../domain/htmlExtraction";
+import { extractPagedDocument, type ExtractedPage } from "../domain/pagedExtraction";
 import { searchCorpus } from "../domain/search";
 import type {
   ExtractedDocument,
+  ExtractorIdentity,
   HtmlDocumentInput,
   SearchRequestState,
   SearchResultView,
@@ -64,13 +68,49 @@ import {
   type HeaderList,
 } from "./warc";
 
-/** Turns the raw bytes of one supported file into the shared document-import input. */
+/** Why a supported binary file has no text document. */
+export type PdfFailureStatus = "no-text" | "encrypted" | "malformed" | "limit-exceeded";
+
+/** Text extracted from a paged binary original (PDF), per physical page. */
+export interface PagedTextResult {
+  kind: "pages";
+  mediaType: "application/pdf";
+  /** The original's own title, if any; the file name is used otherwise. */
+  title: string | null;
+  /** Physical page count, including pages without text. */
+  pageCount: number;
+  /** Pages with text, numbered from 1; pages without text may be omitted. */
+  pages: ExtractedPage[];
+}
+
+/** An explicit outcome for a supported file whose text cannot be indexed. */
+export interface ParserOutcome {
+  kind: "outcome";
+  status: PdfFailureStatus;
+  /** Non-empty human-readable reason. */
+  detail: string;
+}
+
+/** Text adapters return the shared document-import input; binary adapters pages or an outcome. */
+export type ParserResult = HtmlDocumentInput | PagedTextResult | ParserOutcome;
+
+/** Turns the raw bytes of one supported file into a document input or an explicit outcome. */
 export interface ParserAdapter {
   /** Stable parser id, recorded per source; changing it re-parses the source. */
   id: string;
   /** Whether this adapter handles the POSIX path below the scanned root. */
   supports(relativePath: string): boolean;
-  parse(input: { name: string; bytes: Uint8Array; importedAt: string }): HtmlDocumentInput;
+  /**
+   * Library and configuration of a binary extractor. When set, a paged result or outcome is
+   * reused for identical bytes (payload hash + parser id + extractor), and a changed extractor
+   * re-parses the source like a changed parser.
+   */
+  extractor?: ExtractorIdentity;
+  parse(input: {
+    name: string;
+    bytes: Uint8Array;
+    importedAt: string;
+  }): ParserResult | Promise<ParserResult>;
 }
 
 export interface IngestOptions {
@@ -102,9 +142,14 @@ export interface FilesystemSource {
   relativePath: string;
   sha256: string;
   byteLength: number;
-  status: "parsed" | "unsupported";
+  /** `parsed` has a document; a failure status means the parser could not index text. */
+  status: "parsed" | "unsupported" | PdfFailureStatus;
+  /** The adapter that handled the file, also for failure outcomes. */
   parser: string | null;
+  /** Null unless `status` is `parsed`. */
   documentId: string | null;
+  /** Human-readable reason, present exactly for failure outcomes. */
+  detail?: string;
 }
 
 export type SearchIndexState = "missing" | "stale" | "current";
@@ -206,7 +251,7 @@ export const DOCUMENT_IMPORT_ADAPTER: ParserAdapter = {
 
 export const DEFAULT_PARSER_ADAPTERS: readonly ParserAdapter[] = [DOCUMENT_IMPORT_ADAPTER];
 
-const SCHEMA_VERSION = 2;
+const SCHEMA_VERSION = 3;
 const INDEX_MANIFEST_SCHEMA = "document-search-filesystem-index";
 const INDEX_MANIFEST_SCHEMA_VERSION = 1;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
@@ -235,9 +280,10 @@ interface SourceRow {
   relative_path: string;
   sha256: string;
   byte_length: number;
-  status: "parsed" | "unsupported";
+  status: FilesystemSource["status"];
   parser: string | null;
   document_id: string | null;
+  detail: string | null;
 }
 
 /**
@@ -246,7 +292,7 @@ interface SourceRow {
  * choice is independent of scan order; the root path breaks ties defensively.
  */
 const SOURCE_ROWS_SQL = `SELECT s.source_uri, r.root, r.relative_path, s.sha256, s.byte_length,
-    s.status, s.parser, s.document_id
+    s.status, s.parser, s.document_id, s.detail
   FROM sources AS s
   JOIN source_roots AS r ON r.source_uri = s.source_uri AND r.root = (
     SELECT m.root FROM source_roots AS m WHERE m.source_uri = s.source_uri
@@ -275,6 +321,7 @@ function migrate(database: Database): void {
   database.transaction(() => {
     if (version < 1) createSchemaV1(database);
     if (version < 2) createSchemaV2(database);
+    if (version < 3) createSchemaV3(database);
     database.run(`PRAGMA user_version = ${SCHEMA_VERSION}`);
   })();
 }
@@ -326,6 +373,41 @@ function createSchemaV2(database: Database): void {
   database.run("CREATE INDEX captures_by_payload ON captures (payload_sha256, revisit)");
 }
 
+/**
+ * Binary extraction outcomes and extractor identity. `sources` is rebuilt (SQLite cannot alter a
+ * CHECK constraint) to allow failure statuses with a `detail` and to record the extractor
+ * identity a source was parsed with. Runs while foreign keys are off (before the connection
+ * enables them), so the dependent tables keep their rows.
+ */
+function createSchemaV3(database: Database): void {
+  database.run(`CREATE TABLE sources_v3 (
+      source_uri TEXT PRIMARY KEY NOT NULL,
+      sha256 TEXT NOT NULL REFERENCES payloads (sha256),
+      byte_length INTEGER NOT NULL,
+      status TEXT NOT NULL CHECK (status IN
+        ('parsed', 'unsupported', 'no-text', 'encrypted', 'malformed', 'limit-exceeded')),
+      parser TEXT,
+      document_id TEXT UNIQUE,
+      extractor TEXT,
+      detail TEXT,
+      CHECK ((status = 'parsed') = (parser IS NOT NULL AND document_id IS NOT NULL)),
+      CHECK ((status IN ('parsed', 'unsupported')) = (detail IS NULL)),
+      CHECK (status IN ('parsed', 'unsupported') OR parser IS NOT NULL)
+    ) STRICT`);
+  database.run(`INSERT INTO sources_v3 (source_uri, sha256, byte_length, status, parser, document_id)
+    SELECT source_uri, sha256, byte_length, status, parser, document_id FROM sources`);
+  database.run("DROP TABLE sources");
+  database.run("ALTER TABLE sources_v3 RENAME TO sources");
+  // One reusable binary extraction (pages or failure outcome) per payload and extractor.
+  database.run(`CREATE TABLE extractions (
+      sha256 TEXT NOT NULL REFERENCES payloads (sha256),
+      parser TEXT NOT NULL,
+      extractor TEXT NOT NULL,
+      result TEXT NOT NULL,
+      PRIMARY KEY (sha256, parser, extractor)
+    ) STRICT`);
+}
+
 class SqliteFilesystemCorpus implements FilesystemCorpus {
   private readonly directory: string;
   private readonly database: Database;
@@ -354,42 +436,70 @@ class SqliteFilesystemCorpus implements FilesystemCorpus {
       unsupported: 0,
     };
 
-    const findSource = this.database.query<{ sha256: string; parser: string | null }, [string]>(
-      "SELECT sha256, parser FROM sources WHERE source_uri = ?",
-    );
+    const findSource = this.database.query<
+      { sha256: string; parser: string | null; extractor: string | null },
+      [string]
+    >("SELECT sha256, parser, extractor FROM sources WHERE source_uri = ?");
     const countRoots = this.database.query<{ count: number }, [string]>(
       "SELECT COUNT(*) AS count FROM source_roots WHERE source_uri = ?",
     );
     const seen = new Set<string>();
 
-    const ingest = this.database.transaction((files: readonly string[]) => {
-      for (const relativePath of files) {
-        const absolutePath = join(resolvedRoot, ...relativePath.split("/"));
-        const sourceUri = pathToFileURL(absolutePath).href;
-        const bytes = new Uint8Array(readFileSync(absolutePath));
-        const hash = sha256Hex(bytes);
-        const parser = parsers.find((candidate) => candidate.supports(relativePath));
-        report.files += 1;
-        if (!parser) report.unsupported += 1;
-        seen.add(sourceUri);
+    // Parsing may be asynchronous, so every file is read, stored and parsed first; the records
+    // are then written in one transaction. A parser that throws aborts the ingest before any
+    // record changes.
+    const planned: PlannedSource[] = [];
+    for (const relativePath of listRegularFiles(resolvedRoot, this.directory)) {
+      const absolutePath = join(resolvedRoot, ...relativePath.split("/"));
+      const sourceUri = pathToFileURL(absolutePath).href;
+      const bytes = new Uint8Array(readFileSync(absolutePath));
+      const hash = sha256Hex(bytes);
+      const parser = parsers.find((candidate) => candidate.supports(relativePath));
+      const extractorKey = parser?.extractor ? canonicalJson(parser.extractor) : null;
+      report.files += 1;
+      if (!parser) report.unsupported += 1;
+      seen.add(sourceUri);
 
-        this.storePayload(hash, bytes);
-        const existing = findSource.get(sourceUri);
-        // A file first reached through another, overlapping root is unchanged: only its root
-        // membership is new, not its bytes or its parser.
-        const change =
-          existing === null
-            ? "added"
-            : existing.sha256 === hash && existing.parser === (parser?.id ?? null)
-              ? "unchanged"
-              : "updated";
-        report[change] += 1;
-        if (change !== "unchanged") {
-          this.writeSource({ sourceUri, sha256: hash, bytes, importedAt, parser });
-        }
+      this.storePayload(hash, bytes);
+      const existing = findSource.get(sourceUri);
+      // A file first reached through another, overlapping root is unchanged: only its root
+      // membership is new, not its bytes, its parser or its extractor.
+      const change =
+        existing === null
+          ? "added"
+          : existing.sha256 === hash &&
+              existing.parser === (parser?.id ?? null) &&
+              existing.extractor === extractorKey
+            ? "unchanged"
+            : "updated";
+      report[change] += 1;
+      const result =
+        change === "unchanged" || !parser
+          ? undefined
+          : await this.parseSource(parser, extractorKey, {
+              sourceUri,
+              sha256: hash,
+              bytes,
+              importedAt,
+            });
+      planned.push({
+        relativePath,
+        sourceUri,
+        sha256: hash,
+        byteLength: bytes.byteLength,
+        change,
+        parser,
+        extractorKey,
+        result,
+      });
+    }
+
+    const ingest = this.database.transaction(() => {
+      for (const source of planned) {
+        if (source.change !== "unchanged") this.writeSource(source, importedAt);
         this.database.run(
           "INSERT OR REPLACE INTO source_roots (source_uri, root, relative_path) VALUES (?, ?, ?)",
-          [sourceUri, resolvedRoot, relativePath],
+          [source.sourceUri, resolvedRoot, source.relativePath],
         );
       }
 
@@ -414,7 +524,7 @@ class SqliteFilesystemCorpus implements FilesystemCorpus {
       }
     });
 
-    ingest(listRegularFiles(resolvedRoot, this.directory));
+    ingest();
     return report;
   }
 
@@ -549,48 +659,105 @@ class SqliteFilesystemCorpus implements FilesystemCorpus {
     this.database.close();
   }
 
-  private writeSource(source: {
-    sourceUri: string;
-    sha256: string;
-    bytes: Uint8Array;
-    importedAt: string;
-    parser: ParserAdapter | undefined;
-  }): void {
-    const documentId = source.parser ? documentIdSync(source.sourceUri) : null;
+  /**
+   * Runs the parser on one changed source. A binary extraction (paged text or failure outcome)
+   * of an adapter with an extractor identity is reused for identical bytes: the parser runs at
+   * most once per payload hash, parser id and extractor, across paths, roots and restarts.
+   */
+  private async parseSource(
+    parser: ParserAdapter,
+    extractorKey: string | null,
+    source: { sourceUri: string; sha256: string; bytes: Uint8Array; importedAt: string },
+  ): Promise<ParserResult> {
+    const findExtraction = this.database.query<{ result: string }, [string, string, string]>(
+      "SELECT result FROM extractions WHERE sha256 = ? AND parser = ? AND extractor = ?",
+    );
+    if (extractorKey !== null) {
+      const cached = findExtraction.get(source.sha256, parser.id, extractorKey);
+      if (cached) return JSON.parse(cached.result) as ParserResult;
+    }
+
+    const name = basename(fileURLToPath(source.sourceUri));
+    let result: ParserResult;
+    try {
+      result = await parser.parse({ name, bytes: source.bytes, importedAt: source.importedAt });
+    } catch (error) {
+      throw new Error(
+        `Parser ${parser.id} failed for ${source.sourceUri}: ${errorMessage(error)}`,
+        {
+          cause: error,
+        },
+      );
+    }
+    if (isOutcome(result) && !result.detail.trim()) {
+      throw new Error(`Parser ${parser.id} reported ${result.status} without a reason.`);
+    }
+    if (extractorKey !== null && (isOutcome(result) || isPaged(result))) {
+      this.database.run(
+        `INSERT OR REPLACE INTO extractions (sha256, parser, extractor, result)
+         VALUES (?, ?, ?, ?)`,
+        [source.sha256, parser.id, extractorKey, JSON.stringify(result)],
+      );
+    }
+    return result;
+  }
+
+  private writeSource(source: PlannedSource, importedAt: string): void {
+    const { parser, result } = source;
+    const outcome = result && isOutcome(result) ? result : undefined;
+    const documentId = parser && !outcome ? documentIdSync(source.sourceUri) : null;
+    const status = !parser ? "unsupported" : outcome ? outcome.status : "parsed";
     this.database.run(
-      `INSERT INTO sources (source_uri, sha256, byte_length, status, parser, document_id)
-       VALUES (?, ?, ?, ?, ?, ?)
+      `INSERT INTO sources
+         (source_uri, sha256, byte_length, status, parser, document_id, extractor, detail)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?)
        ON CONFLICT (source_uri) DO UPDATE SET
          sha256 = excluded.sha256,
          byte_length = excluded.byte_length,
          status = excluded.status,
          parser = excluded.parser,
-         document_id = excluded.document_id`,
+         document_id = excluded.document_id,
+         extractor = excluded.extractor,
+         detail = excluded.detail`,
       [
         source.sourceUri,
         source.sha256,
-        source.bytes.byteLength,
-        source.parser ? "parsed" : "unsupported",
-        source.parser?.id ?? null,
+        source.byteLength,
+        status,
+        parser?.id ?? null,
         documentId,
+        parser ? source.extractorKey : null,
+        outcome?.detail ?? null,
       ],
     );
-    if (!source.parser || documentId === null) {
+    if (!parser || !result || documentId === null || isOutcome(result)) {
       this.database.run("DELETE FROM documents WHERE source_uri = ?", [source.sourceUri]);
       return;
     }
 
-    const name = basename(fileURLToPath(source.sourceUri));
-    let input: HtmlDocumentInput;
-    try {
-      input = source.parser.parse({ name, bytes: source.bytes, importedAt: source.importedAt });
-    } catch (error) {
-      throw new Error(
-        `Parser ${source.parser.id} failed for ${source.sourceUri}: ${errorMessage(error)}`,
-        { cause: error },
-      );
+    let document: ExtractedDocument;
+    if (isPaged(result)) {
+      if (!parser.extractor) {
+        throw new Error(`Parser ${parser.id} returned pages without an extractor identity.`);
+      }
+      const name = basename(fileURLToPath(source.sourceUri));
+      document = extractPagedDocument({
+        id: documentId,
+        title: result.title ?? name,
+        sourceUri: source.sourceUri,
+        importedAt,
+        pages: result.pages,
+        asset: {
+          mediaType: result.mediaType,
+          sha256: source.sha256,
+          byteLength: source.byteLength,
+          pageCount: result.pageCount,
+        },
+        extractor: parser.extractor,
+      });
+    } else {
+      document = extractHtmlDocument({ ...result, id: documentId, sourceUri: source.sourceUri });
     }
-    const document = extractHtmlDocument({ ...input, id: documentId, sourceUri: source.sourceUri });
     const record = JSON.stringify(document);
     this.database.run(
       `INSERT INTO documents (id, source_uri, record, record_sha256) VALUES (?, ?, ?, ?)
@@ -1028,7 +1195,42 @@ function toFilesystemSource(row: SourceRow): FilesystemSource {
     status: row.status,
     parser: row.parser,
     documentId: row.document_id,
+    ...(row.detail === null ? {} : { detail: row.detail }),
   };
+}
+
+interface PlannedSource {
+  relativePath: string;
+  sourceUri: string;
+  sha256: string;
+  byteLength: number;
+  change: "added" | "updated" | "unchanged";
+  parser: ParserAdapter | undefined;
+  /** Canonical JSON of the parser's extractor identity, or null. */
+  extractorKey: string | null;
+  /** Parser result for an added or updated source with a parser. */
+  result: ParserResult | undefined;
+}
+
+function isOutcome(result: ParserResult): result is ParserOutcome {
+  return (result as { kind?: unknown }).kind === "outcome";
+}
+
+function isPaged(result: ParserResult): result is PagedTextResult {
+  return (result as { kind?: unknown }).kind === "pages";
+}
+
+/** JSON with object keys sorted at every level, so equal values give equal text. */
+function canonicalJson(value: unknown): string {
+  return JSON.stringify(value, (_key, entry: unknown) =>
+    entry !== null && typeof entry === "object" && !Array.isArray(entry)
+      ? Object.fromEntries(
+          Object.entries(entry as Record<string, unknown>).sort(([left], [right]) =>
+            compareCodeUnits(left, right),
+          ),
+        )
+      : entry,
+  );
 }
 
 function writeFileAtomically(path: string, content: string | Uint8Array): void {

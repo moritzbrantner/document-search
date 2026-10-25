@@ -18,6 +18,7 @@
   "dependencies": {
     "@moritzbrantner/nlp-stack-wasm": "github:moritzbrantner/nlp-stack-wasm#002fb586a8460f6c26c9f457fe6e59ddf3199d97",
     "@tanstack/react-query": "^5.101.0",
+    "pdfjs-dist": "6.4.299",
     "react": "^19.2.6",
     "react-dom": "^19.2.6"
   },
