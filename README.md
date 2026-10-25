@@ -120,6 +120,46 @@ changed the corpus) and asks for `rebuild-index`. It then runs the same
 request-scoped `nlp-stack` search as the browser, so ranking and filtering stay
 in `nlp-stack`.
 
+### Web captures
+
+Web pages enter the filesystem corpus only through an explicit capture; search,
+ingest and the browser app never fetch anything.
+
+```bash
+bun run corpus capture --corpus ./my-corpus [--url-list urls.txt] [<url> ...]
+bun run corpus captures --corpus ./my-corpus
+bun run corpus capture-payload --corpus ./my-corpus --out page.html <capture-id>
+```
+
+`capture` fetches each http(s) URL once with `GET` (one URL per line in
+`--url-list`; blank and `#` lines are ignored), follows up to 10 redirects and
+records every hop. It exits 1 when any URL failed; the other captures are kept.
+For each capture the corpus stores:
+
+- `warc/<capture-id>.warc`: a WARC 1.1 file with a `warcinfo` record (capture
+  producer and version) and a `request`/`response` pair per redirect hop. The
+  response body is kept exactly as received (`Accept-Encoding: identity` is
+  requested; a server-applied content coding is kept, not decoded). Digests are
+  `sha256:<hex>`. A final payload an earlier capture already archived is written
+  as a `revisit` record (identical-payload-digest profile) without the bytes.
+- the final payload under `payloads/`, once per SHA-256 like scanned files, so a
+  capture can be inspected from its exact stored bytes after the live page
+  changed (`capture-payload`).
+- a capture record: requested and final URL, retrieval time, redirect chain,
+  status, response headers, media type and charset, payload hash and length,
+  WARC location/hash, producer/version and extraction status.
+
+Every capture is its own record, and successful (2xx) HTML, Markdown and
+plain-text responses become their own searchable document (source URI = final
+URL, import time = retrieval time), even when another capture or URL returned
+identical bytes; recapturing a URL keeps the earlier capture. Other responses are
+captured without a document. In the corpus-core export a capture is a `url`
+Source (requested URL; final URL, retrieval time, redirect chain, HTTP status and
+capture producer in its metadata) with an Asset holding the exact payload hash,
+`Content-Type` and WARC record; the extracted text is a separate
+`extracted_text` Representation whose provenance names the asset and extractor.
+A successful capture says nothing about a source's reliability or authority.
+
 ## Heading-path export contract
 
 Paragraph heading paths are dense arrays of **actual heading text**, from outermost active

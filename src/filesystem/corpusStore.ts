@@ -5,6 +5,8 @@
 // - `corpus.sqlite`: source/path aliases, parser state and extracted document records.
 //   It holds no full-text tables; retrieval and ranking stay in nlp-stack.
 // - `index/`: derived search-index state, rebuildable from the corpus records at any time.
+// - `warc/<capture-id>.warc`: one WARC 1.1 file per explicit web capture (`captureUrls`); the
+//   final response payload is also stored under `payloads/` like a scanned file.
 //
 // Documents are produced by the same import/extraction functions as the browser mode, so both
 // modes share one corpus model (`ExtractedDocument`) and one corpus-core export.
@@ -36,7 +38,31 @@ import type {
   SearchRequestState,
   SearchResultView,
 } from "../domain/types";
-import { createCorpusCoreBatch, serializeCorpusCoreBatch } from "../storage/corpusCoreExport";
+import {
+  createCorpusCoreBatch,
+  serializeCorpusCoreBatch,
+  type WebCaptureExportInput,
+} from "../storage/corpusCoreExport";
+import {
+  captureHttp,
+  decodeContentCoding,
+  parseContentType,
+  WEB_CAPTURE_PRODUCER,
+  WEB_CAPTURE_VERSION,
+  type HttpCaptureOptions,
+  type HttpCaptureResult,
+} from "./webCapture";
+import {
+  concatBytes,
+  deterministicRecordId,
+  headerValue,
+  httpHeaderBlock,
+  labelledSha256,
+  REVISIT_PROFILE,
+  serializeWarcRecord,
+  warcDate,
+  type HeaderList,
+} from "./warc";
 
 /** Turns the raw bytes of one supported file into the shared document-import input. */
 export interface ParserAdapter {
@@ -83,6 +109,66 @@ export interface FilesystemSource {
 
 export type SearchIndexState = "missing" | "stale" | "current";
 
+/** Extractor id recorded for web captures whose final response is HTML, Markdown or text. */
+export const WEB_CAPTURE_EXTRACTOR = "web-capture/document-import";
+
+export type CaptureOptions = HttpCaptureOptions;
+
+/** One hop of a capture's redirect chain; the last hop is the final response. */
+export interface WebCaptureHop {
+  url: string;
+  status: number;
+  location: string | null;
+  retrievedAt: string;
+}
+
+/**
+ * One explicit retrieval of one requested URL. Every capture is its own record (and, when its
+ * text was extracted, its own document), even when its payload bytes equal another capture's.
+ */
+export interface WebCapture {
+  captureId: string;
+  requestedUrl: string;
+  finalUrl: string;
+  /** Retrieval timestamp of the final response. */
+  retrievedAt: string;
+  redirectChain: WebCaptureHop[];
+  status: number;
+  reason: string;
+  /** Final response header fields in received order. */
+  headers: [string, string][];
+  /** Raw Content-Type header of the final response. */
+  contentType: string | null;
+  mediaType: string | null;
+  charset: string | null;
+  contentEncoding: string | null;
+  /** SHA-256 of the exact final entity bytes, stored once under `payloads/`. */
+  payloadSha256: string;
+  payloadByteLength: number;
+  warc: {
+    /** Path relative to the corpus directory. */
+    path: string;
+    sha256: string;
+    /** Record id of the final `response` (or `revisit`) record. */
+    responseRecordId: string;
+    /** Set when the final record is a revisit of an earlier capture's identical payload. */
+    revisitOf: string | null;
+  };
+  producer: { name: string; version: string };
+  extraction: {
+    status: "parsed" | "unsupported";
+    extractor: string | null;
+    /** Why no text was extracted, when unsupported. */
+    reason: string | null;
+  };
+  documentId: string | null;
+}
+
+export interface CaptureReport {
+  captures: WebCapture[];
+  failed: { url: string; error: string }[];
+}
+
 export interface FilesystemCorpus {
   ingestFolder(root: string, options?: IngestOptions): Promise<IngestReport>;
   listSources(): Promise<FilesystemSource[]>;
@@ -93,6 +179,13 @@ export interface FilesystemCorpus {
   indexStatus(): Promise<{ state: SearchIndexState }>;
   search(request: SearchRequestState): Promise<SearchResultView[]>;
   exportCorpusCore(producerRevision: string): Promise<string>;
+  /** Explicitly fetches each URL once and stores it as a WARC-backed web capture. */
+  captureUrls(urls: readonly string[], options?: CaptureOptions): Promise<CaptureReport>;
+  listCaptures(): Promise<WebCapture[]>;
+  readCapture(captureId: string): Promise<WebCapture | undefined>;
+  /** The exact stored final-response entity bytes of a capture. */
+  readCapturePayload(captureId: string): Promise<Uint8Array | undefined>;
+  readCaptureWarc(captureId: string): Promise<Uint8Array | undefined>;
   close(): void;
 }
 
@@ -113,7 +206,7 @@ export const DOCUMENT_IMPORT_ADAPTER: ParserAdapter = {
 
 export const DEFAULT_PARSER_ADAPTERS: readonly ParserAdapter[] = [DOCUMENT_IMPORT_ADAPTER];
 
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const INDEX_MANIFEST_SCHEMA = "document-search-filesystem-index";
 const INDEX_MANIFEST_SCHEMA_VERSION = 1;
 const SHA256_PATTERN = /^[0-9a-f]{64}$/;
@@ -174,17 +267,24 @@ function migrate(database: Database): void {
   if (version === SCHEMA_VERSION) {
     return;
   }
-  if (version !== 0) {
+  if (version < 0 || version > SCHEMA_VERSION) {
     throw new Error(
       `Unsupported filesystem corpus schema version ${version}; expected ${SCHEMA_VERSION}.`,
     );
   }
   database.transaction(() => {
-    database.run(`CREATE TABLE payloads (
+    if (version < 1) createSchemaV1(database);
+    if (version < 2) createSchemaV2(database);
+    database.run(`PRAGMA user_version = ${SCHEMA_VERSION}`);
+  })();
+}
+
+function createSchemaV1(database: Database): void {
+  database.run(`CREATE TABLE payloads (
       sha256 TEXT PRIMARY KEY NOT NULL,
       byte_length INTEGER NOT NULL
     ) STRICT`);
-    database.run(`CREATE TABLE sources (
+  database.run(`CREATE TABLE sources (
       source_uri TEXT PRIMARY KEY NOT NULL,
       sha256 TEXT NOT NULL REFERENCES payloads (sha256),
       byte_length INTEGER NOT NULL,
@@ -193,22 +293,37 @@ function migrate(database: Database): void {
       document_id TEXT UNIQUE,
       CHECK ((status = 'parsed') = (parser IS NOT NULL AND document_id IS NOT NULL))
     ) STRICT`);
-    // Every scanned root that contains a source; overlapping roots each keep their membership.
-    database.run(`CREATE TABLE source_roots (
+  // Every scanned root that contains a source; overlapping roots each keep their membership.
+  database.run(`CREATE TABLE source_roots (
       source_uri TEXT NOT NULL REFERENCES sources (source_uri) ON DELETE CASCADE,
       root TEXT NOT NULL,
       relative_path TEXT NOT NULL,
       PRIMARY KEY (source_uri, root)
     ) STRICT`);
-    database.run("CREATE INDEX source_roots_by_root ON source_roots (root)");
-    database.run(`CREATE TABLE documents (
+  database.run("CREATE INDEX source_roots_by_root ON source_roots (root)");
+  database.run(`CREATE TABLE documents (
       id TEXT PRIMARY KEY NOT NULL,
       source_uri TEXT NOT NULL UNIQUE REFERENCES sources (source_uri) ON DELETE CASCADE,
       record TEXT NOT NULL,
       record_sha256 TEXT NOT NULL
     ) STRICT`);
-    database.run(`PRAGMA user_version = ${SCHEMA_VERSION}`);
-  })();
+}
+
+/**
+ * Web captures. Each capture owns one `sources` row keyed by its internal capture source key
+ * (never a file URL, so folder scans never touch it) and references its payload by hash.
+ */
+function createSchemaV2(database: Database): void {
+  database.run(`CREATE TABLE captures (
+      capture_id TEXT PRIMARY KEY NOT NULL,
+      source_key TEXT NOT NULL UNIQUE REFERENCES sources (source_uri),
+      requested_url TEXT NOT NULL,
+      retrieved_at TEXT NOT NULL,
+      payload_sha256 TEXT NOT NULL REFERENCES payloads (sha256),
+      revisit INTEGER NOT NULL CHECK (revisit IN (0, 1)),
+      record TEXT NOT NULL
+    ) STRICT`);
+  database.run("CREATE INDEX captures_by_payload ON captures (payload_sha256, revisit)");
 }
 
 class SqliteFilesystemCorpus implements FilesystemCorpus {
@@ -378,9 +493,56 @@ class SqliteFilesystemCorpus implements FilesystemCorpus {
   }
 
   async exportCorpusCore(producerRevision: string): Promise<string> {
-    return serializeCorpusCoreBatch(
-      await createCorpusCoreBatch(await this.listDocuments(), producerRevision),
+    const captures = await this.listCaptures();
+    const webCaptures = await Promise.all(
+      captures.map(async (capture) => this.captureExportInput(capture)),
     );
+    return serializeCorpusCoreBatch(
+      await createCorpusCoreBatch(await this.listDocuments(), producerRevision, { webCaptures }),
+    );
+  }
+
+  async captureUrls(urls: readonly string[], options: CaptureOptions = {}): Promise<CaptureReport> {
+    const report: CaptureReport = { captures: [], failed: [] };
+    for (const url of urls) {
+      let result: HttpCaptureResult;
+      try {
+        result = await captureHttp(url, options);
+      } catch (error) {
+        report.failed.push({ url, error: errorMessage(error) });
+        continue;
+      }
+      report.captures.push(this.storeCapture(result));
+    }
+    return report;
+  }
+
+  async listCaptures(): Promise<WebCapture[]> {
+    return this.database
+      .query<{ record: string }, []>(
+        "SELECT record FROM captures ORDER BY retrieved_at, capture_id",
+      )
+      .all()
+      .map((row) => JSON.parse(row.record) as WebCapture);
+  }
+
+  async readCapture(captureId: string): Promise<WebCapture | undefined> {
+    const row = this.database
+      .query<{ record: string }, [string]>("SELECT record FROM captures WHERE capture_id = ?")
+      .get(captureId);
+    return row ? (JSON.parse(row.record) as WebCapture) : undefined;
+  }
+
+  async readCapturePayload(captureId: string): Promise<Uint8Array | undefined> {
+    const capture = await this.readCapture(captureId);
+    return capture ? this.readPayload(capture.payloadSha256) : undefined;
+  }
+
+  async readCaptureWarc(captureId: string): Promise<Uint8Array | undefined> {
+    const capture = await this.readCapture(captureId);
+    if (!capture) return undefined;
+    const path = join(this.directory, ...capture.warc.path.split("/"));
+    return existsSync(path) ? new Uint8Array(readFileSync(path)) : undefined;
   }
 
   close(): void {
@@ -438,6 +600,145 @@ class SqliteFilesystemCorpus implements FilesystemCorpus {
          record_sha256 = excluded.record_sha256`,
       [documentId, source.sourceUri, record, sha256Hex(new TextEncoder().encode(record))],
     );
+  }
+
+  private storeCapture(result: HttpCaptureResult): WebCapture {
+    const final = result.exchanges.at(-1)!;
+    const firstRetrievedAt = result.exchanges[0]!.retrievedAt;
+    const captureId = `capture-${sha256Hex(
+      new TextEncoder().encode(`${result.requestedUrl}\0${firstRetrievedAt}`),
+    ).slice(0, 32)}`;
+    if (this.readCaptureRow(captureId)) {
+      throw new Error(`Capture ${captureId} already exists (same URL and retrieval time).`);
+    }
+    const sourceKey = `urn:document-search:capture:${captureId}`;
+    const body = final.response.body;
+    const payloadSha256 = sha256Hex(body);
+    const earlier = this.database
+      .query<{ record: string }, [string]>(
+        `SELECT record FROM captures WHERE payload_sha256 = ? AND revisit = 0
+         ORDER BY retrieved_at, capture_id LIMIT 1`,
+      )
+      .get(payloadSha256);
+    const revisitOf = earlier ? (JSON.parse(earlier.record) as WebCapture) : undefined;
+
+    const warc = buildCaptureWarc(captureId, result, revisitOf);
+    const warcPath = `warc/${captureId}.warc`;
+    const contentType = headerValue(final.response.headers, "content-type") ?? null;
+    const { mediaType, charset } = parseContentType(contentType ?? undefined);
+    const extracted = extractCapturedDocument(
+      result,
+      mediaType,
+      charset,
+      documentIdSync(sourceKey),
+    );
+    const capture: WebCapture = {
+      captureId,
+      requestedUrl: result.requestedUrl,
+      finalUrl: result.finalUrl,
+      retrievedAt: final.retrievedAt,
+      redirectChain: result.exchanges.map((exchange) => ({
+        url: exchange.request.url,
+        status: exchange.response.status,
+        location: headerValue(exchange.response.headers, "location") ?? null,
+        retrievedAt: exchange.retrievedAt,
+      })),
+      status: final.response.status,
+      reason: final.response.reason,
+      headers: final.response.headers,
+      contentType,
+      mediaType,
+      charset,
+      contentEncoding: headerValue(final.response.headers, "content-encoding") ?? null,
+      payloadSha256,
+      payloadByteLength: body.byteLength,
+      warc: {
+        path: warcPath,
+        sha256: sha256Hex(warc.bytes),
+        responseRecordId: warc.responseRecordId,
+        revisitOf: revisitOf?.warc.responseRecordId ?? null,
+      },
+      producer: { name: WEB_CAPTURE_PRODUCER, version: WEB_CAPTURE_VERSION },
+      extraction: extracted.document
+        ? { status: "parsed", extractor: WEB_CAPTURE_EXTRACTOR, reason: null }
+        : { status: "unsupported", extractor: null, reason: extracted.reason },
+      documentId: extracted.document?.id ?? null,
+    };
+
+    mkdirSync(join(this.directory, "warc"), { recursive: true });
+    writeFileAtomically(join(this.directory, ...warcPath.split("/")), warc.bytes);
+    this.database.transaction(() => {
+      this.storePayload(payloadSha256, body);
+      this.database.run(
+        `INSERT INTO sources (source_uri, sha256, byte_length, status, parser, document_id)
+         VALUES (?, ?, ?, ?, ?, ?)`,
+        [
+          sourceKey,
+          payloadSha256,
+          body.byteLength,
+          capture.extraction.status,
+          capture.extraction.extractor,
+          capture.documentId,
+        ],
+      );
+      if (extracted.document) {
+        const record = JSON.stringify(extracted.document);
+        this.database.run(
+          "INSERT INTO documents (id, source_uri, record, record_sha256) VALUES (?, ?, ?, ?)",
+          [extracted.document.id, sourceKey, record, sha256Hex(new TextEncoder().encode(record))],
+        );
+      }
+      this.database.run(
+        `INSERT INTO captures
+           (capture_id, source_key, requested_url, retrieved_at, payload_sha256, revisit, record)
+         VALUES (?, ?, ?, ?, ?, ?, ?)`,
+        [
+          captureId,
+          sourceKey,
+          capture.requestedUrl,
+          capture.retrievedAt,
+          payloadSha256,
+          revisitOf ? 1 : 0,
+          JSON.stringify(capture),
+        ],
+      );
+    })();
+    return capture;
+  }
+
+  private readCaptureRow(captureId: string): { capture_id: string } | null {
+    return this.database
+      .query<{ capture_id: string }, [string]>(
+        "SELECT capture_id FROM captures WHERE capture_id = ?",
+      )
+      .get(captureId);
+  }
+
+  private async captureExportInput(capture: WebCapture): Promise<WebCaptureExportInput> {
+    const payload = await this.readPayload(capture.payloadSha256);
+    if (!payload) {
+      throw new Error(`Capture payload ${capture.payloadSha256} is missing from the corpus.`);
+    }
+    return {
+      captureId: capture.captureId,
+      documentId: capture.documentId,
+      requestedUrl: capture.requestedUrl,
+      finalUrl: capture.finalUrl,
+      retrievedAt: capture.retrievedAt,
+      status: capture.status,
+      redirectChain: capture.redirectChain,
+      contentType: capture.contentType,
+      contentEncoding: capture.contentEncoding,
+      payloadSha256: capture.payloadSha256,
+      payloadByteLength: capture.payloadByteLength,
+      payloadText: decodeUploadedBytes(payload).originalContent,
+      warcPath: capture.warc.path,
+      warcSha256: capture.warc.sha256,
+      warcRecordId: capture.warc.responseRecordId,
+      producer: capture.producer.name,
+      producerVersion: capture.producer.version,
+      extractor: capture.extraction.extractor,
+    };
   }
 
   private storePayload(sha256: string, bytes: Uint8Array): void {
@@ -518,6 +819,169 @@ class SqliteFilesystemCorpus implements FilesystemCorpus {
       return undefined;
     }
   }
+}
+
+const TEXT_MEDIA_TYPES: Record<string, string> = {
+  "text/html": "text/html",
+  "application/xhtml+xml": "text/html",
+  "text/markdown": "text/markdown",
+  "text/x-markdown": "text/markdown",
+  "text/plain": "text/plain",
+};
+
+/**
+ * Readable text of a capture's final response, through the shared document-import extraction.
+ * Only successful (2xx) HTML, Markdown and plain-text responses are extracted; the document's
+ * `sourceUri` is the final URL and its import time the retrieval time.
+ */
+function extractCapturedDocument(
+  result: HttpCaptureResult,
+  mediaType: string | null,
+  charset: string | null,
+  documentId: string,
+): { document: ExtractedDocument; reason?: undefined } | { document?: undefined; reason: string } {
+  const final = result.exchanges.at(-1)!;
+  if (final.response.status < 200 || final.response.status > 299) {
+    return { reason: `HTTP status ${final.response.status}` };
+  }
+  const importType = mediaType === null ? undefined : TEXT_MEDIA_TYPES[mediaType];
+  if (importType === undefined) {
+    return { reason: `media type ${mediaType ?? "(none)"} has no text extractor` };
+  }
+  let bytes: Uint8Array;
+  try {
+    bytes = decodeContentCoding(final.response.body, final.response.headers);
+  } catch (error) {
+    return { reason: errorMessage(error) };
+  }
+  const exact = decodeUploadedBytes(bytes);
+  let content = exact.content;
+  if (charset !== null && charset !== "utf-8" && charset !== "utf8") {
+    try {
+      content = new TextDecoder(charset).decode(bytes);
+    } catch {
+      return { reason: `unsupported charset ${charset}` };
+    }
+  }
+  const lossless = bytes === final.response.body && content === exact.content;
+  const input = parseUploadedDocument({
+    name: result.finalUrl,
+    mimeType: importType,
+    content,
+    originalContent: lossless ? exact.originalContent : null,
+    importedAt: final.retrievedAt,
+  });
+  // The URL is no title: let the extraction use the page's own <title>/<h1> first.
+  const document = extractHtmlDocument({
+    ...input,
+    title: undefined,
+    id: documentId,
+    sourceUri: result.finalUrl,
+  });
+  return { document };
+}
+
+/** One WARC 1.1 file for a capture: warcinfo, then request/response per redirect hop. */
+function buildCaptureWarc(
+  captureId: string,
+  result: HttpCaptureResult,
+  revisitOf: WebCapture | undefined,
+): { bytes: Uint8Array; responseRecordId: string } {
+  const records: Uint8Array[] = [];
+  const firstDate = warcDate(result.exchanges[0]!.retrievedAt);
+  const warcinfoId = deterministicRecordId(captureId, "warcinfo");
+  const fields = new TextEncoder().encode(
+    [
+      `software: ${WEB_CAPTURE_PRODUCER}/${WEB_CAPTURE_VERSION}`,
+      `format: WARC File Format 1.1`,
+      "conformsTo: https://iipc.github.io/warc-specifications/specifications/warc-format/warc-1.1/",
+      `document-search-capture-id: ${captureId}`,
+      `document-search-requested-url: ${result.requestedUrl}`,
+      "",
+    ].join("\r\n"),
+  );
+  records.push(
+    serializeWarcRecord(
+      [
+        ["WARC-Type", "warcinfo"],
+        ["WARC-Record-ID", warcinfoId],
+        ["WARC-Date", firstDate],
+        ["WARC-Filename", `${captureId}.warc`],
+        ["Content-Type", "application/warc-fields"],
+        ["WARC-Block-Digest", labelledSha256(fields)],
+      ],
+      fields,
+    ),
+  );
+
+  let responseRecordId = "";
+  result.exchanges.forEach((exchange, index) => {
+    const date = warcDate(exchange.retrievedAt);
+    const requestId = deterministicRecordId(captureId, "request", String(index));
+    const responseId = deterministicRecordId(captureId, "response", String(index));
+    const requestBlock = httpHeaderBlock(
+      `GET ${exchange.request.target} HTTP/1.1`,
+      exchange.request.headers,
+    );
+    records.push(
+      serializeWarcRecord(
+        [
+          ["WARC-Type", "request"],
+          ["WARC-Record-ID", requestId],
+          ["WARC-Date", date],
+          ["WARC-Target-URI", exchange.request.url],
+          ["WARC-Concurrent-To", responseId],
+          ["WARC-Warcinfo-ID", warcinfoId],
+          ["Content-Type", "application/http;msgtype=request"],
+          ["WARC-Block-Digest", labelledSha256(requestBlock)],
+        ],
+        requestBlock,
+      ),
+    );
+
+    const response = exchange.response;
+    const headerBlock = httpHeaderBlock(
+      `HTTP/${response.httpVersion} ${response.status} ${response.reason}`.trimEnd(),
+      archivedResponseHeaders(response.headers),
+    );
+    const isFinal = index === result.exchanges.length - 1;
+    const revisit = isFinal && revisitOf !== undefined;
+    const block = revisit ? headerBlock : concatBytes([headerBlock, response.body]);
+    const headers: [string, string][] = [
+      ["WARC-Type", revisit ? "revisit" : "response"],
+      ["WARC-Record-ID", responseId],
+      ["WARC-Date", date],
+      ["WARC-Target-URI", exchange.request.url],
+      ["WARC-Concurrent-To", requestId],
+      ["WARC-Warcinfo-ID", warcinfoId],
+      ...(response.ipAddress ? [["WARC-IP-Address", response.ipAddress] as [string, string]] : []),
+      ["Content-Type", "application/http;msgtype=response"],
+      ["WARC-Block-Digest", labelledSha256(block)],
+      ["WARC-Payload-Digest", labelledSha256(response.body)],
+    ];
+    if (revisit) {
+      headers.push(
+        ["WARC-Profile", REVISIT_PROFILE],
+        ["WARC-Refers-To", revisitOf.warc.responseRecordId],
+        ["WARC-Refers-To-Target-URI", revisitOf.finalUrl],
+        ["WARC-Refers-To-Date", warcDate(revisitOf.retrievedAt)],
+      );
+    }
+    records.push(serializeWarcRecord(headers, block));
+    if (isFinal) responseRecordId = responseId;
+  });
+  return { bytes: concatBytes(records), responseRecordId };
+}
+
+/**
+ * Response header fields as archived. The entity body is stored with its transfer coding
+ * already removed, so a `Transfer-Encoding` field is kept under the conventional
+ * `X-Archive-Orig-` prefix instead of describing bytes that are not in the record.
+ */
+function archivedResponseHeaders(headers: HeaderList): [string, string][] {
+  return headers.map(([name, value]) =>
+    name.toLowerCase() === "transfer-encoding" ? [`X-Archive-Orig-${name}`, value] : [name, value],
+  );
 }
 
 /**

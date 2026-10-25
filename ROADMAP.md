@@ -8,7 +8,8 @@ Document Search should stay local-first and keep retrieval semantics in `nlp-sta
 2. [x] **Upload browser-readable documents.** Accept HTML, Markdown, and plain text, normalize them through the existing extraction boundary, persist them in IndexedDB, and include them in search without a server-side corpus.
 3. [ ] **Add richer document formats deliberately.** Add PDF and office-document extraction behind explicit parser adapters, preferably off the main thread, with size limits and regression fixtures before enabling them in the public demo.
 4. [x] **Add a local filesystem corpus mode for large folders.** A Bun CLI (`bun run corpus`) ingests nested folders deterministically into a managed corpus directory: content-addressed SHA-256 payloads, SQLite source/path aliases and document records, and a rebuildable derived index. It reuses the browser import, extraction, search and corpus-core export functions, and leaves ranking in `nlp-stack`. Parser adapters are the seam for richer formats; PDF extraction is still open (item 3).
-5. [ ] **Make ingestion observability explicit.** Surface parse duration, extracted paragraph counts, rejected files, and index synchronization state without moving ranking policy into the application.
+5. [x] **Capture web pages reproducibly.** An explicit `bun run corpus capture` stores each requested URL as a WARC 1.1 file (request/response per redirect hop) plus its exact payload, records retrieval provenance, and exports captures as corpus-core Source/Asset records with extracted text as a derived Representation. Ordinary search stays network-free.
+6. [ ] **Make ingestion observability explicit.** Surface parse duration, extracted paragraph counts, rejected files, and index synchronization state without moving ranking policy into the application.
 
 ## Corpus interoperability
 
