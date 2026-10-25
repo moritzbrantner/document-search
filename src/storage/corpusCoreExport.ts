@@ -109,11 +109,50 @@ export interface CorpusCoreBatchV1 {
   payloads: CorpusPayload[];
 }
 
+/**
+ * One explicit web capture (filesystem corpus `captureUrls`). Its HTTP/capture provenance goes
+ * to the Source and Asset records; the extracted text stays a derived Representation.
+ */
+export interface WebCaptureExportInput {
+  captureId: string;
+  /** The capture's extracted document, or null when no text was extracted. */
+  documentId: string | null;
+  requestedUrl: string;
+  finalUrl: string;
+  retrievedAt: string;
+  status: number;
+  redirectChain: readonly {
+    url: string;
+    status: number;
+    location: string | null;
+    retrievedAt: string;
+  }[];
+  /** Raw Content-Type header of the final response. */
+  contentType: string | null;
+  contentEncoding: string | null;
+  /** SHA-256 of the exact final entity bytes. */
+  payloadSha256: string;
+  payloadByteLength: number;
+  /** The exact payload as text when the bytes are lossless UTF-8, else null (not exported). */
+  payloadText: string | null;
+  warcPath: string;
+  warcSha256: string;
+  warcRecordId: string;
+  producer: string;
+  producerVersion: string;
+  extractor: string | null;
+}
+
+export interface CorpusCoreBatchOptions {
+  webCaptures?: readonly WebCaptureExportInput[];
+}
+
 const textEncoder = new TextEncoder();
 
 export async function createCorpusCoreBatch(
   documents: ExtractedDocument[],
   producerRevision: string,
+  options: CorpusCoreBatchOptions = {},
 ): Promise<CorpusCoreBatchV1> {
   if (!producerRevision.trim()) {
     throw new Error("A producer revision is required for corpus-core export.");
@@ -125,48 +164,63 @@ export async function createCorpusCoreBatch(
     if (!payloads.has(payload.hash)) payloads.set(payload.hash, payload);
   };
 
+  const captures = [...(options.webCaptures ?? [])].sort((left, right) =>
+    compareCodeUnits(left.captureId, right.captureId),
+  );
+  const captureByDocument = new Map(
+    captures.flatMap((capture) =>
+      capture.documentId === null ? [] : [[capture.documentId, capture] as const],
+    ),
+  );
+
   const ordered = [...documents].sort((left, right) => compareCodeUnits(left.id, right.id));
   for (const document of ordered) {
     const sourceId = await deriveCorpusId("source", [PRODUCER_NAME, document.id]);
     const assetId = await deriveCorpusId("asset", [sourceId]);
     const assetRef: CorpusItemRef = { record_type: "asset", id: assetId };
     const uri = document.sourceUri ?? `document-search:document/${document.id}`;
+    const capture = captureByDocument.get(document.id);
 
-    records.push({
-      record_type: "source",
-      record: {
-        id: sourceId,
-        kind: /^https?:\/\//i.test(document.sourceUri ?? "") ? "url" : "inline",
-        uri,
-        metadata: sortedMetadata({ title: document.title, imported_at: document.importedAt }),
-      },
-    });
-
-    const original = document.original;
-    const assetText = original ? original.content : document.html;
-    const assetMediaType = original ? original.mediaType : "text/html";
-    const assetHash = await sha256Hex(assetText);
-    records.push({
-      record_type: "asset",
-      record: {
-        id: assetId,
-        source_id: sourceId,
-        kind: assetMediaType === "text/html" ? "web_page" : "text",
-        content: {
+    if (capture) {
+      records.push(...captureSourceAndAsset(capture, sourceId, assetId, document.title));
+      if (capture.payloadText !== null) addPayload(capturePayload(capture));
+    } else {
+      records.push({
+        record_type: "source",
+        record: {
+          id: sourceId,
+          kind: /^https?:\/\//i.test(document.sourceUri ?? "") ? "url" : "inline",
           uri,
-          hash: assetHash,
-          media_type: `${assetMediaType}; charset=utf-8`,
-          byte_length: utf8Length(assetText),
+          metadata: sortedMetadata({ title: document.title, imported_at: document.importedAt }),
         },
-        metadata: { content_basis: original ? "original" : "normalized_html" },
-      },
-    });
-    if (original) {
-      addPayload({
-        hash: assetHash,
-        media_type: `${original.mediaType}; charset=utf-8`,
-        text: original.content,
       });
+
+      const original = document.original;
+      const assetText = original ? original.content : document.html;
+      const assetMediaType = original ? original.mediaType : "text/html";
+      const assetHash = await sha256Hex(assetText);
+      records.push({
+        record_type: "asset",
+        record: {
+          id: assetId,
+          source_id: sourceId,
+          kind: assetMediaType === "text/html" ? "web_page" : "text",
+          content: {
+            uri,
+            hash: assetHash,
+            media_type: `${assetMediaType}; charset=utf-8`,
+            byte_length: utf8Length(assetText),
+          },
+          metadata: { content_basis: original ? "original" : "normalized_html" },
+        },
+      });
+      if (original) {
+        addPayload({
+          hash: assetHash,
+          media_type: `${original.mediaType}; charset=utf-8`,
+          text: original.content,
+        });
+      }
     }
 
     const textHash = await sha256Hex(document.text);
@@ -184,7 +238,7 @@ export async function createCorpusCoreBatch(
         content_hash: textHash,
         content: null,
         provenance: provenance("extract_text", producerRevision, [assetRef]),
-        metadata: {},
+        metadata: capture?.extractor ? { extractor: capture.extractor } : {},
       },
     });
     addPayload({ hash: textHash, media_type: TEXT_PAYLOAD_MEDIA_TYPE, text: document.text });
@@ -226,6 +280,15 @@ export async function createCorpusCoreBatch(
       });
       start = end + scalarLength(PARAGRAPH_SEPARATOR);
     }
+  }
+
+  // Captures without extracted text still export their exact HTTP payload as Source + Asset.
+  for (const capture of captures) {
+    if (capture.documentId !== null) continue;
+    const sourceId = await deriveCorpusId("source", [PRODUCER_NAME, capture.captureId]);
+    const assetId = await deriveCorpusId("asset", [sourceId]);
+    records.push(...captureSourceAndAsset(capture, sourceId, assetId, null));
+    if (capture.payloadText !== null) addPayload(capturePayload(capture));
   }
 
   return {
@@ -334,6 +397,76 @@ export async function deriveCorpusId(
     offset += 8 + bytes.byteLength;
   }
   return `${namespace}:${await digestHex(buffer)}`;
+}
+
+/**
+ * Source and Asset records of one capture. Each capture keeps its own Source (requested URL and
+ * retrieval) even when another capture holds identical payload bytes: the assets then simply
+ * share one content hash.
+ */
+function captureSourceAndAsset(
+  capture: WebCaptureExportInput,
+  sourceId: string,
+  assetId: string,
+  title: string | null,
+): CorpusRecord[] {
+  const sourceMetadata: CorpusMetadata = {
+    capture_id: capture.captureId,
+    capture_producer: capture.producer,
+    capture_producer_version: capture.producerVersion,
+    final_url: capture.finalUrl,
+    http_status: String(capture.status),
+    imported_at: capture.retrievedAt,
+    redirect_chain: JSON.stringify(capture.redirectChain),
+    requested_url: capture.requestedUrl,
+    retrieved_at: capture.retrievedAt,
+  };
+  if (title !== null) sourceMetadata.title = title;
+  const assetMetadata: CorpusMetadata = {
+    content_basis: "http_payload",
+    warc_file: capture.warcPath,
+    warc_file_sha256: capture.warcSha256,
+    warc_record_id: capture.warcRecordId,
+  };
+  if (capture.contentEncoding !== null) assetMetadata.content_encoding = capture.contentEncoding;
+  const mediaType = capture.contentType?.split(";", 1)[0]?.trim().toLowerCase() ?? "";
+  return [
+    {
+      record_type: "source",
+      record: {
+        id: sourceId,
+        kind: "url",
+        uri: capture.requestedUrl,
+        metadata: sortedMetadata(sourceMetadata),
+      },
+    },
+    {
+      record_type: "asset",
+      record: {
+        id: assetId,
+        source_id: sourceId,
+        kind:
+          mediaType === "text/html" || mediaType === "application/xhtml+xml"
+            ? "web_page"
+            : "web_resource",
+        content: {
+          uri: capture.finalUrl,
+          hash: capture.payloadSha256,
+          media_type: capture.contentType,
+          byte_length: capture.payloadByteLength,
+        },
+        metadata: sortedMetadata(assetMetadata),
+      },
+    },
+  ];
+}
+
+function capturePayload(capture: WebCaptureExportInput): CorpusPayload {
+  return {
+    hash: capture.payloadSha256,
+    media_type: capture.contentType ?? "application/octet-stream",
+    text: capture.payloadText ?? "",
+  };
 }
 
 function provenance(

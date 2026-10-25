@@ -25,3 +25,7 @@ _Avoid_: File entry, Duplicate
 **Payload**:
 The raw bytes of a scanned file, stored once per SHA-256 hash in the corpus directory and referenced by every path alias holding those bytes.
 _Avoid_: Blob, Attachment
+
+**Web capture**:
+One explicit retrieval of one requested URL into the filesystem corpus, stored as a WARC 1.1 file plus its final response payload. Each capture is its own record and document, even when its payload bytes equal another capture's.
+_Avoid_: Crawl, Snapshot, Bookmark
