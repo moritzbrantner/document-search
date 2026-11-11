@@ -96,8 +96,9 @@ The corpus directory holds:
   Unsupported files are kept too, so later parser adapters can extract them from
   the corpus alone.
 - `corpus.sqlite`: one source record per file path (its `file://` URI, payload
-  hash, parser id and document id), the scanned roots that contain each path,
-  and the extracted document records. It has no full-text tables. When
+  hash, parser id, extractor, status and document id), the scanned roots that
+  contain each path, reusable PDF extractions and the extracted document
+  records. It has no full-text tables. When
   overlapping roots were scanned, `sources` reports the most specific (longest)
   root and the path below it.
 - `index/`: derived search-index state written by `rebuild-index`. It can be
@@ -112,8 +113,47 @@ time, changed bytes keep the document id, and deleted files lose their alias.
 Re-scanning one root never removes files of another root that still exist, and
 a file found through another, overlapping root counts as unchanged. A deleted
 file is removed by re-scanning any root that contained it. Files no parser
-adapter supports, such as PDF, are recorded as `unsupported` without a document;
-PDF extraction is not implemented yet.
+adapter supports are recorded as `unsupported` without a document.
+
+#### PDF files
+
+Filesystem mode indexes embedded PDF text (the `pdf-text` parser adapter,
+`src/filesystem/pdfAdapter.ts`, built on Mozilla PDF.js `pdfjs-dist`, pinned in
+`package.json`/`bun.lock`). The PDF bytes stay the content-addressed original;
+the extracted text is a derived representation and never passes the
+HTML/Markdown upload normalization.
+
+- Pages are the physical pages in page-tree order, numbered from 1, including
+  empty pages (printed page labels are not used). Text is taken in
+  content-stream order, grouped into lines and paragraphs by baseline gaps, and
+  normalized to NFC with whitespace runs collapsed. Every paragraph lies on
+  exactly one page, so each search hit reports its `page` next to its document,
+  paragraph (chunk) and snippet, and a phrase split across a page break is not
+  matched as one phrase.
+- Each PDF document records its asset (`application/pdf`, SHA-256, byte length,
+  page count) and its extractor (library name, version and configuration).
+  Extraction runs at most once per payload hash and extractor: identical PDFs at
+  other paths or roots, unchanged re-scans and restarts reuse it, while every
+  path keeps its own source and document. Changed bytes or a changed extractor
+  version or configuration re-extract the text and make the index stale.
+- Scanned PDFs (image-only, no embedded text) need OCR, which is not supported
+  yet; they get status `no-text`. PDFs that need a password get `encrypted`,
+  unparseable files `malformed`, and files over a limit `limit-exceeded`. Each
+  failure keeps its bytes, records a `detail` reason in `sources`, gets no
+  document and does not stop the rest of the ingest.
+- Limits: 64 MiB per file (larger files are not opened) and 2,000 physical
+  pages (`PDF_TEXT_DEFAULT_LIMITS`; configurable through
+  `createPdfTextAdapter({ maxBytes, maxPages })`). Extraction runs in-process,
+  bounded by these limits.
+- In the corpus-core export a PDF is an Asset of kind `document` holding the PDF
+  hash, `application/pdf` and byte length (the binary is not a payload); its
+  `extracted_text` Representation carries the extractor name, version and
+  configuration (`parameters_hash` is the SHA-256 of the canonical
+  configuration JSON), and each paragraph Segment has a Unicode-scalar
+  `character_range` into that text and a zero-based `page_index`.
+
+OCR, password handling, office formats, layout/table reconstruction and PDF
+uploads in the browser app are not implemented.
 
 Search refuses to run while the index is missing or stale (after an ingest that
 changed the corpus) and asks for `rebuild-index`. It then runs the same

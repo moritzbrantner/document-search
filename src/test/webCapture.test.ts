@@ -323,6 +323,7 @@ describe("web capture", () => {
     corpora.splice(corpora.indexOf(corpus), 1);
     const database = new Database(join(dir, "corpus.sqlite"));
     database.run("DROP TABLE captures");
+    database.run("DROP TABLE extractions");
     database.run("PRAGMA user_version = 1");
     database.close();
 
