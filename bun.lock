@@ -5,7 +5,7 @@
     "": {
       "name": "document-search",
       "dependencies": {
-        "@moritzbrantner/nlp-stack-wasm": "github:moritzbrantner/nlp-stack-wasm#002fb586a8460f6c26c9f457fe6e59ddf3199d97",
+        "@moritzbrantner/nlp-stack-wasm": "github:moritzbrantner/nlp-stack-wasm#42e0b91c6b8582d2e61bc516cfa8f4c297c26c03",
         "@tanstack/react-query": "^5.101.0",
         "pdfjs-dist": "6.5.438",
         "react": "^19.2.6",
@@ -118,7 +118,7 @@
 
     "@keyv/serialize": ["@keyv/serialize@1.1.1", "", {}, "sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA=="],
 
-    "@moritzbrantner/nlp-stack-wasm": ["@moritzbrantner/nlp-stack-wasm@github:moritzbrantner/nlp-stack-wasm#002fb58", { "hasInstallScript": true }, "moritzbrantner-nlp-stack-wasm-002fb58", "sha512-0YomgxKo2jAtyelALASENYIpMViLK6MEcOIM0DIQZ5ufAnc4sN3XgZVGwsYnCu7rURDUuuv2vwCzuBwx3l3lFA=="],
+    "@moritzbrantner/nlp-stack-wasm": ["@moritzbrantner/nlp-stack-wasm@github:moritzbrantner/nlp-stack-wasm#42e0b91", { "hasInstallScript": true }, "moritzbrantner-nlp-stack-wasm-42e0b91", "sha512-OM7BQjexWi5+KcBdjJns01JZGaA2/CuJMq7QHyR3SB27Ba9eSd4uKIl77gTxFBX+zbGgBdyUTCRpcTR2dx3hKA=="],
 
     "@napi-rs/canvas": ["@napi-rs/canvas@1.1.0", "", { "optionalDependencies": { "@napi-rs/canvas-android-arm64": "1.1.0", "@napi-rs/canvas-darwin-arm64": "1.1.0", "@napi-rs/canvas-darwin-x64": "1.1.0", "@napi-rs/canvas-linux-arm-gnueabihf": "1.1.0", "@napi-rs/canvas-linux-arm64-gnu": "1.1.0", "@napi-rs/canvas-linux-arm64-musl": "1.1.0", "@napi-rs/canvas-linux-riscv64-gnu": "1.1.0", "@napi-rs/canvas-linux-x64-gnu": "1.1.0", "@napi-rs/canvas-linux-x64-musl": "1.1.0", "@napi-rs/canvas-win32-arm64-msvc": "1.1.0", "@napi-rs/canvas-win32-x64-msvc": "1.1.0" } }, "sha512-k+ph/D8H9GS8ZZ48okvHrKeJynkqAA1kMUZRuzRWNlQUDHXngq7oRaWMZBdmSfd9ZhVy9bwNKei/7wMboI/uMg=="],
 
