@@ -13,6 +13,37 @@
     "completion": {
       "tier": "full"
     },
-    "scopes": []
+    "scopes": [
+      {
+        "id": "query-and-search",
+        "paths": [
+          "src/domain/phraseQuery.ts",
+          "src/domain/search.ts",
+          "src/wasm/textIndex.ts",
+          "src/components/SearchPanel.tsx",
+          "src/components/SearchResults.tsx",
+          "src/test/phraseQuery.test.ts",
+          "src/test/search.test.ts"
+        ],
+        "conventionRefs": ["DESIGN-006"],
+        "capabilities": ["test"],
+        "examples": [
+          { "path": "src/test/phraseQuery.test.ts" },
+          { "path": "src/test/search.test.ts" },
+          { "path": "e2e/corpus-journeys.e2e.ts" }
+        ]
+      },
+      {
+        "id": "source-span-export",
+        "paths": ["src/storage/sourceSpanExport.ts", "src/test/sourceSpanExport.test.ts"],
+        "conventionRefs": ["DESIGN-006"],
+        "capabilities": ["test"],
+        "examples": [
+          { "path": "src/test/sourceSpanExport.test.ts" },
+          { "path": "src/test/headingPathExport.test.ts" },
+          { "path": "e2e/heading-paths.e2e.ts" }
+        ]
+      }
+    ]
   }
 }
